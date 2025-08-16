@@ -11,7 +11,6 @@ import io.github.yok.csvdblink.db.DbDialectHandlerFactory;
 import io.github.yok.csvdblink.db.DbUnitConfigFactory;
 import io.github.yok.csvdblink.util.OracleDateTimeFormatUtil;
 import java.io.InputStream;
-import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.URL;
 import java.nio.file.DirectoryStream;
@@ -19,24 +18,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.springframework.jdbc.datasource.DataSourceUtils;
@@ -49,14 +42,14 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <ul>
  * <li>Load timing: {@link #beforeTestExecution(ExtensionContext)} (after Spring's test transaction
  * starts).</li>
- * <li>If Spring is present, reflectively obtain the {@code ApplicationContext} and acquire a
- * {@code DataSource}, then call {@code DataSourceUtils.getConnection(...)} so the load participates
- * in the <b>test transaction</b>.</li>
- * <li>If Spring is not present / cannot participate, keep a dedicated connection (autoCommit=false)
- * and <b>rollback at the end of the class</b>.</li>
- * <li>When using a Spring-managed connection, wrap it with a proxy that <b>neutralizes
- * commit/rollback/close/setAutoCommit</b>; additionally, when using Oracle, the proxy also
- * implements <b>oracle.jdbc.OracleConnection</b> to satisfy DBUnit cast requirements.</li>
+ * <li>Obtain a {@code DataSource} bound in Spring's test transaction via
+ * {@link org.springframework.transaction.support.TransactionSynchronizationManager}, then acquire a
+ * {@code
+ * Connection} with
+ * {@link org.springframework.jdbc.datasource.DataSourceUtils#getConnection(javax.sql.DataSource)}
+ * so the load participates in the <b>test transaction</b>.</li>
+ * <li>When using a Spring-managed connection, wrap it with a proxy that neutralizes {@code close()}
+ * to avoid premature closing by third-party code.</li>
  * <li>Eliminates CLI dependency by overriding {@link PathsConfig} via an anonymous class.</li>
  * </ul>
  *
@@ -71,18 +64,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <li>Principle: <b>delegate transaction control to the caller (test/app)</b></li>
  * <li>When participating in Spring: this class does not call commit/rollback/close. The test's
  * {@code @Transactional} rollback cleans up.</li>
- * <li>When not participating in Spring: perform the load on a dedicated connection and rollback
- * &amp; close in {@link #afterAll(ExtensionContext)}.</li>
  * </ul>
  *
  * @author Yasuharu.Okawauchi
  */
 @Slf4j
-public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallback,
-        BeforeTestExecutionCallback, AfterAllCallback {
-
-    // Dedicated connections kept only when not participating in Spring (autoCommit=false)
-    private final Map<String, Connection> managedConnections = new LinkedHashMap<>();
+public class LoadCsvDataExtension implements BeforeAllCallback, BeforeTestExecutionCallback {
 
     // The resources-root folder for the test class
     private Path testClassRoot;
@@ -106,16 +93,6 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
     }
 
     /**
-     * No-op. Actual processing is done in {@link #beforeTestExecution(ExtensionContext)}.
-     *
-     * @param context JUnit execution context
-     */
-    @Override
-    public void beforeEach(ExtensionContext context) {
-        // no-op
-    }
-
-    /**
      * Just before each test executes: interpret {@link LoadCsvData} on the class/method and perform
      * the load.
      *
@@ -128,6 +105,10 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
      */
     @Override
     public void beforeTestExecution(ExtensionContext context) throws Exception {
+        if (testClassRoot == null || appProps == null) {
+            beforeAll(context);
+        }
+
         Class<?> testClass = context.getRequiredTestClass();
 
         LoadCsvData classAnn = testClass.getAnnotation(LoadCsvData.class);
@@ -163,46 +144,8 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
     }
 
     /**
-     * Class-end: rollback &amp; close only the connections established when not participating in
-     * Spring.
-     *
-     * @param context JUnit execution context
-     * @throws Exception if rollback or close fails
-     */
-    @Override
-    public void afterAll(ExtensionContext context) throws Exception {
-        for (Map.Entry<String, Connection> e : managedConnections.entrySet()) {
-            final String db = e.getKey();
-            final Connection c = e.getValue();
-            try {
-                try {
-                    if (c != null && !c.isClosed()) {
-                        log.info("Rolling back changes for DB={}...", db);
-                        c.rollback();
-                    } else {
-                        log.info("DB={} connection already closed, no rollback required", db);
-                    }
-                } catch (Exception ex) {
-                    log.info("Skipping rollback for DB={} (already closed/invalid): {}", db,
-                            ex.toString());
-                }
-            } finally {
-                try {
-                    if (c != null) {
-                        c.close();
-                    }
-                } catch (Exception ignore) {
-                    // Failure here has no impact
-                }
-            }
-        }
-        managedConnections.clear();
-    }
-
-    /**
      * Load a given scenario.<br>
-     * If Spring is available, join the test transaction; otherwise load using a dedicated
-     * connection.
+     * Always join the Spring-managed test transaction.
      *
      * @param context JUnit execution context (used to obtain Spring ApplicationContext)
      * @param scenarioName scenario directory name
@@ -266,22 +209,16 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
                         : detectDbNames(testClassRoot.resolve(scenarioName));
 
         for (String db : dbNames) {
-            // Try to obtain a Spring-managed DataSource
+            // Always obtain a Spring-managed DataSource
             Optional<DataSource> dsOpt = maybeGetSpringManagedDataSource(context, db);
-            Connection conn;
-
-            if (dsOpt.isPresent()) {
-                DataSource ds = dsOpt.get();
-                conn = DataSourceUtils.getConnection(ds);
-                conn = wrapConnectionNoClose(conn);
-            } else {
-                conn = managedConnections.computeIfAbsent(db, this::openConnectionForDb);
-                try {
-                    conn.setAutoCommit(false);
-                } catch (Exception ignore) {
-                    // ignore
-                }
+            if (dsOpt.isEmpty()) {
+                throw new IllegalStateException("No Spring-managed DataSource found for DB=" + db);
             }
+
+            DataSource ds = dsOpt.get();
+            Connection conn = DataSourceUtils.getConnection(ds);
+            conn = wrapConnectionNoClose(conn);
+
             ConnectionConfig.Entry entry = buildEntryFromProps(db);
             loader.executeWithConnection(scenarioName, entry, conn);
         }
@@ -317,147 +254,29 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
     }
 
     /**
-     * Obtain {@code DataSource} beans from the Spring TestContext's {@code ApplicationContext}
-     * (provided by JUnit 5 {@code SpringExtension}) via <strong>reflection</strong>.
+     * Returns a {@link DataSource} that is currently bound to Spring's test transaction, if any.
      *
      * <p>
-     * Prefer a {@link DataSource} currently bound in {@link TransactionSynchronizationManager}'s
-     * resource map; if not found, reflectively query the Spring {@code ApplicationContext}.
+     * Checks {@link TransactionSynchronizationManager#getResourceMap()} and returns the key that is
+     * a {@link DataSource}.
      * </p>
      *
-     * @param context JUnit {@link ExtensionContext}
-     * @param dbName the logical DB name (used for selecting a bean by name)
-     * @return the matching {@link DataSource}, if any
+     * @param context JUnit {@link ExtensionContext}; not used
+     * @param dbName logical database name; not used
+     * @return {@link Optional} containing the bound {@link DataSource} if present; otherwise
+     *         {@link Optional#empty()}
      */
     private Optional<DataSource> maybeGetSpringManagedDataSource(ExtensionContext context,
             String dbName) {
-        try {
-            // Prefer a DataSource bound in the current TX
-            Map<Object, Object> resourceMap = TransactionSynchronizationManager.getResourceMap();
-            for (Map.Entry<Object, Object> e : resourceMap.entrySet()) {
-                if (e.getKey() instanceof DataSource) {
-                    DataSource dsInTx = (DataSource) e.getKey();
-                    return Optional.of(dsInTx);
-                }
-            }
 
-            // Obtain ApplicationContext from SpringExtension
-            Class<?> springExt =
-                    Class.forName("org.springframework.test.context.junit.jupiter.SpringExtension");
-            Method getCtx = springExt.getMethod("getApplicationContext", ExtensionContext.class);
-            Object appCtx = getCtx.invoke(null, context);
-
-            if (appCtx == null) {
-                return Optional.empty();
-            }
-
-            // Retrieve DataSource beans
-            Class<?> dataSourceClass = Class.forName("javax.sql.DataSource");
-            Method getBeansOfType = appCtx.getClass().getMethod("getBeansOfType", Class.class);
-            Object beansObj = getBeansOfType.invoke(appCtx, dataSourceClass);
-            if (!(beansObj instanceof Map)) {
-                return Optional.empty();
-            }
-
-            final Map<?, ?> beans = (Map<?, ?>) beansObj;
-            if (beans.isEmpty()) {
-                return Optional.empty();
-            }
-
-            // Bean name selection
-            final Set<String> beanNames = beans.keySet().stream()
-                    .map(obj -> (obj == null ? "null" : obj.toString())).collect(
-                            java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-
-            final String key = chooseDataSourceBeanKey(beanNames, dbName);
-            final Object dsObj = beans.get(key);
-            if (!(dsObj instanceof DataSource)) {
-                return Optional.empty();
-            }
-            return Optional.of((DataSource) dsObj);
-
-        } catch (ClassNotFoundException e) {
-            return Optional.empty();
-        } catch (Throwable t) {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Heuristic to choose a DataSource bean name.
-     *
-     * @param names discovered bean names
-     * @param dbName DB logical name (e.g., {@code "operator.bbb"})
-     * @return selected bean name
-     */
-    private String chooseDataSourceBeanKey(Set<String> names, String dbName) {
-        if (names.size() == 1) {
-            return names.iterator().next();
-        }
-
-        String lowerDb = Objects.requireNonNullElse(dbName, "").toLowerCase(Locale.ROOT);
-        String lastSeg =
-                lowerDb.contains(".") ? lowerDb.substring(lowerDb.lastIndexOf('.') + 1) : lowerDb;
-
-        for (String n : names) {
-            if (n.equalsIgnoreCase(dbName)) {
-                return n;
+        // 1. Prefer a DataSource currently bound to the transaction
+        Map<Object, Object> resourceMap = TransactionSynchronizationManager.getResourceMap();
+        for (Map.Entry<Object, Object> e : resourceMap.entrySet()) {
+            if (e.getKey() instanceof DataSource) {
+                return Optional.of((DataSource) e.getKey());
             }
         }
-        if (!lastSeg.isEmpty()) {
-            for (String n : names) {
-                if (n.toLowerCase(Locale.ROOT).contains(lastSeg)) {
-                    return n;
-                }
-            }
-        }
-        for (String n : names) {
-            if ("dataSource".equalsIgnoreCase(n)) {
-                return n;
-            }
-        }
-        return names.iterator().next();
-    }
-
-    /**
-     * Create a new JDBC connection for a DB name (used only when not participating in Spring).
-     *
-     * @param db DB name (e.g., {@code operator.bbb}); may be null/blank
-     * @return an open connection
-     */
-    private Connection openConnectionForDb(String db) {
-        try {
-            final String dbName = StringUtils.isBlank(db) ? null : db.trim();
-            final String dbKeyLower = (dbName == null) ? null : dbName.toLowerCase(Locale.ROOT);
-
-            Optional<DataSource> dsOpt = DataSourceRegistry.find(dbName);
-            if (dsOpt.isPresent()) {
-                DataSource ds = dsOpt.get();
-                return DataSourceUtils.getConnection(ds);
-            }
-
-            final String url = resolvePropertyForDb(appProps, dbKeyLower, "url");
-            final String username = resolvePropertyForDb(appProps, dbKeyLower, "username");
-            final String password = resolvePropertyForDb(appProps, dbKeyLower, "password");
-            final String driver = resolvePropertyForDb(appProps, dbKeyLower, "driver-class-name");
-
-            if (url == null || username == null) {
-                throw new IllegalStateException(
-                        "Missing connection info (DB=" + (dbName == null ? "<none>" : dbName)
-                                + "): expected *[.]" + (dbName == null ? "" : dbKeyLower + "[.]")
-                                + "*.(url|username)[, password, driver-class-name]");
-            }
-
-            if (StringUtils.isNotBlank(driver)) {
-                Class.forName(driver);
-            }
-
-            return DriverManager.getConnection(url, username, password);
-
-        } catch (Exception ex) {
-            throw new IllegalStateException("Failed to establish DB connection (DB="
-                    + (db == null ? "<none>" : db) + "): " + ex.getMessage(), ex);
-        }
+        return Optional.empty();
     }
 
     /**
@@ -496,11 +315,17 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
     /**
      * Flexibly resolve one property value matching the given DB name (optional) and suffix.
      *
+     * <p>
+     * This method searches through {@link Properties} keys and selects the one with the highest
+     * score according to {@link #scoreKeyWithSegments(String, String[], String)}. Typical suffixes
+     * are: {@code url}, {@code username}, {@code password}, {@code driver-class-name}.
+     * </p>
+     *
      * @param props all properties
      * @param dbNameLower lowercase DB name (e.g., {@code operator.bbb}); may be null
      * @param suffix one of {@code url}, {@code username}, {@code password},
      *        {@code driver-class-name}
-     * @return the value, or null if none found
+     * @return the value, or {@code null} if none found
      */
     private String resolvePropertyForDb(Properties props, String dbNameLower, String suffix) {
         final String targetSuffix = "." + suffix;
@@ -537,10 +362,19 @@ public class LoadCsvDataExtension implements BeforeAllCallback, BeforeEachCallba
     /**
      * Score a property key based on priority (e.g., contiguous matches to DB name segments).
      *
-     * @param keyLower lowercase key
-     * @param dbSegs DB name segments
-     * @param suffix suffix
-     * @return score
+     * <p>
+     * Keys are scored higher when:
+     * <ul>
+     * <li>they contain contiguous matches of DB name segments,</li>
+     * <li>matches appear near the key suffix,</li>
+     * <li>they follow the typical Spring Boot convention ({@code spring.datasource.*}).</li>
+     * </ul>
+     * </p>
+     *
+     * @param keyLower lowercase property key (e.g., {@code spring.datasource.bbb.url})
+     * @param dbSegs DB name segments (split by ".")
+     * @param suffix suffix (e.g., {@code url}, {@code username})
+     * @return score (higher = better match)
      */
     private int scoreKeyWithSegments(String keyLower, String[] dbSegs, String suffix) {
         int score = 0;

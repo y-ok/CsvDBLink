@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.github.yok</groupId>
 	<artifactId>csvdblink</artifactId>
-	<version>0.0.1</version>
+	<version>0.0.2</version>
 	<name>CsvDBLink</name>
 	<description>CSV ↔ DB loader/dumper with LOB support and JUnit 5 integration.</description>
 	<url>https://github.com/y-ok/CsvDBLink</url>
@@ -22,6 +22,13 @@
 			<url>https://github.com/y-ok</url>
 		</developer>
 	</developers>
+	<distributionManagement>
+		<repository>
+			<id>github</id>
+			<name>GitHub Packages for y-ok/CsvDBLink</name>
+			<url>https://maven.pkg.github.com/y-ok/CsvDBLink</url>
+		</repository>
+	</distributionManagement>
 	<scm>
 		<url>https://github.com/y-ok/CsvDBLink</url>
 		<connection>scm:git:https://github.com/y-ok/CsvDBLink.git</connection>
@@ -43,7 +50,6 @@
 		<artifactId>spring-boot-starter-parent</artifactId>
 		<version>2.7.18</version>
 		<relativePath/>
-		<!-- 既存プロジェクトに合わせて調整 -->
 	</parent>
 	<!-- Javadoc Setting -->
 	<organization>
@@ -304,7 +310,7 @@
 					<target>11</target>
 				</configuration>
 			</plugin>
-			<!-- <plugin>
+			<plugin>
 				<groupId>io.github.git-commit-id</groupId>
 				<artifactId>git-commit-id-maven-plugin</artifactId>
 				<version>9.0.2</version>
@@ -318,8 +324,6 @@
 					</execution>
 				</executions>
 				<configuration>
-					<failOnNoGitDirectory>false</failOnNoGitDirectory>
-					<failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
 					<generateGitPropertiesFile>true</generateGitPropertiesFile>
 					<generateGitPropertiesFilename>${project.build.outputDirectory}/git.properties</generateGitPropertiesFilename>
 					<includeOnlyProperties>
@@ -329,7 +333,7 @@
 					</includeOnlyProperties>
 					<commitIdGenerationMode>full</commitIdGenerationMode>
 				</configuration>
-			</plugin> -->
+			</plugin>
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
