@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.github.yok</groupId>
 	<artifactId>csvdblink</artifactId>
-	<version>0.0.2</version>
+	<version>0.0.5</version>
 	<name>CsvDBLink</name>
 	<description>CSV ↔ DB loader/dumper with LOB support and JUnit 5 integration.</description>
 	<url>https://github.com/y-ok/CsvDBLink</url>
