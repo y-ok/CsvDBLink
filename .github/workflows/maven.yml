@@ -20,4 +20,4 @@ jobs:
           server-id: github
           server-username: ${{ github.actor }}
           server-password: ${{ secrets.GITHUB_TOKEN }}
-      - run: mvn -B -ntp clean deploy -Dmaven.test.skip=true
+      - run: mvn clean deploy -Dmaven.test.skip=true
