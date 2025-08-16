@@ -1,0 +1,39 @@
+data-path: /absolute/path/to/project-root
+
+dbunit:
+  dataTypeFactoryMode: ORACLE
+  lob-dir-name: files
+  pre-dir-name: pre
+  csv:
+    format:
+      date: "yyyy-MM-dd"
+      time: "HH:mm:ss"
+      dateTime: "yyyy-MM-dd HH:mm:ss"
+      dateTimeWithMillis: "yyyy-MM-dd HH:mm:ss.SSS"
+  config:
+    allow-empty-fields: true
+    batched-statements: true
+    batch-size: 100
+
+connections:
+  - id: DB1
+    url: jdbc:oracle:thin:@localhost:1521/OPEDB
+    user: oracle
+    password: password
+    driver-class: oracle.jdbc.OracleDriver
+
+file-patterns:
+  SAMPLE_BLOB_TABLE:
+    FILE_DATA: "LeapSecond_{ID}.dat"
+  BINARY_TEST_TABLE:
+    BLOB_COL: "sample{ID}.bin"
+  CHAR_CLOB_TEST_TABLE:
+    CLOB_COL: "char_clob_{ID}.clob"
+    NCLOB_COL: "char_clob_{ID}.nclob"
+  XML_JSON_TEST_TABLE:
+    JSON_DATA: "json_data_{ID}.json"
+    XML_DATA: "xml_data_{ID}.xml"
+
+dump:
+  exclude-tables:
+    - flyway_schema_history

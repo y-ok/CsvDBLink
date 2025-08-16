@@ -1,0 +1,33 @@
+<assembly xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.3 
+                              http://maven.apache.org/xsd/assembly-1.1.3.xsd">
+  <id>distribution</id>
+  <formats>
+    <format>zip</format>
+  </formats>
+
+  <!-- ZIP解凍直後に CsvDBLink/ がルートに来る -->
+  <includeBaseDirectory>true</includeBaseDirectory>
+  <baseDirectory>CsvDBLink</baseDirectory>
+
+  <!-- 実行JAR（exec）を dbunit-data-tool.jar という名前でルートに配置 -->
+  <files>
+    <file>
+      <source>${project.build.directory}/${project.artifactId}-exec.jar</source>
+      <outputDirectory>/</outputDirectory>
+      <destName>${project.artifactId}.jar</destName>
+    </file>
+  </files>
+
+  <fileSets>
+    <!-- application.yml を conf/ に配置（src/main/resources から直接拾う） -->
+    <fileSet>
+      <directory>${project.basedir}/src/main/resources</directory>
+      <outputDirectory>conf</outputDirectory>
+      <includes>
+        <include>application.yml</include>
+      </includes>
+    </fileSet>
+  </fileSets>
+</assembly>

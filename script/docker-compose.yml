@@ -1,0 +1,34 @@
+
+services:
+  oracle-db:
+    image: oracle/database:19.3.0-ee
+    container_name: oracle19c
+    restart: unless-stopped
+
+    environment:
+      ORACLE_SID: ORCLCDB
+      ORACLE_PDB: OPEDB
+      ORACLE_PWD: MyP@ssw0rd1
+      ORACLE_CHARACTERSET: AL32UTF8
+      ORACLE_EDITION: enterprise
+      ENABLE_ARCHIVELOG: false
+
+    ports:
+      - "1521:1521"
+      - "5500:5500"
+
+    volumes:
+      # データファイル永続化
+      - oracle-data:/opt/oracle/oradata
+      # 初期化スクリプト
+      - ./db-scripts/setup:/opt/oracle/scripts/setup
+      - ./db-scripts/startup:/opt/oracle/scripts/startup
+
+    healthcheck:
+      test: ["CMD-SHELL", "echo \"SELECT 1 FROM dual;\" | sqlplus -s sys/${ORACLE_PWD}@${ORACLE_SID} as sysdba"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  oracle-data:

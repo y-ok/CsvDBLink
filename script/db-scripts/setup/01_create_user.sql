@@ -1,0 +1,3 @@
+-- PDB=OPEDB 上で oracle ユーザーを作成
+ALTER SESSION SET CONTAINER=OPEDB;
+CREATE USER oracle IDENTIFIED BY password;

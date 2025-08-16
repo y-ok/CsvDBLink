@@ -1,0 +1,39 @@
+{
+  "java.format.settings.profile": "GoogleStyle",
+  "java.format.settings.url": "config/formatter/eclipse-java-google-style.xml",
+  "java.completion.importOrder": [
+    "com",
+    "io",
+    "java",
+    "javax",
+    "lombok",
+    "net",
+    "oracle",
+    "org",
+    ""
+  ],
+  "java.project.sourcePaths": [
+    "src/main/java"
+  ],
+  "java.compile.nullAnalysis.mode": "disabled",
+  "java.jdt.ls.java.home": "/usr/local/Cellar/openjdk@11/11.0.27/libexec/openjdk.jdk/Contents/Home",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-11",
+      "path": "/usr/local/Cellar/openjdk@11/11.0.27/libexec/openjdk.jdk/Contents/Home",
+      "default": true
+    }
+  ],
+  "[java]": {
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "always"
+    }
+  },
+  "java.debug.settings.onBuildFailureProceed": true,
+  "liveServer.settings.port": 5501,
+  "java.configuration.updateBuildConfiguration": "automatic"
+}

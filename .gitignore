@@ -1,0 +1,16 @@
+target/
+
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+script/CsvDBLink
+script/oradata/*
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.ansible/
+.settings/
