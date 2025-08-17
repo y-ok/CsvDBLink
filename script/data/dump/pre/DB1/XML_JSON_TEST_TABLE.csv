@@ -1,0 +1,3 @@
+ID,JSON_DATA,XML_DATA
+1,file:json_data_1.json,file:xml_data_1.xml
+2,file:json_data_2.json,file:xml_data_2.xml
