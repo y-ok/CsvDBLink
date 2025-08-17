@@ -3,11 +3,11 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.github.yok</groupId>
-	<artifactId>csvdblink</artifactId>
-	<version>0.0.5</version>
-	<name>CsvDBLink</name>
-	<description>CSV ↔ DB loader/dumper with LOB support and JUnit 5 integration.</description>
-	<url>https://github.com/y-ok/CsvDBLink</url>
+	<artifactId>flexdblink</artifactId>
+	<version>0.1.0</version>
+	<name>FlexDBLink</name>
+	<description>CSV/JSON/YAML/XML ↔ DB loader/dumper with LOB support and JUnit 5 integration.</description>
+	<url>https://github.com/y-ok/FlexDBLink</url>
 	<licenses>
 		<license>
 			<name>Apache License, Version 2.0</name>
@@ -25,14 +25,14 @@
 	<distributionManagement>
 		<repository>
 			<id>github</id>
-			<name>GitHub Packages for y-ok/CsvDBLink</name>
-			<url>https://maven.pkg.github.com/y-ok/CsvDBLink</url>
+			<name>GitHub Packages for y-ok/FlexDBLink</name>
+			<url>https://maven.pkg.github.com/y-ok/FlexDBLink</url>
 		</repository>
 	</distributionManagement>
 	<scm>
-		<url>https://github.com/y-ok/CsvDBLink</url>
-		<connection>scm:git:https://github.com/y-ok/CsvDBLink.git</connection>
-		<developerConnection>scm:git:ssh://git@github.com/y-ok/CsvDBLink.git</developerConnection>
+		<url>https://github.com/y-ok/FlexDBLink</url>
+		<connection>scm:git:https://github.com/y-ok/FlexDBLink.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/y-ok/FlexDBLink.git</developerConnection>
 	</scm>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -202,7 +202,7 @@
 					</excludes>
 					<archive>
 						<manifestEntries>
-							<Automatic-Module-Name>io.github.yok.csvdblink</Automatic-Module-Name>
+							<Automatic-Module-Name>io.github.yok.flexdblink</Automatic-Module-Name>
 						</manifestEntries>
 					</archive>
 				</configuration>
@@ -212,7 +212,7 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
 					<classifier>exec</classifier>
-					<mainClass>io.github.yok.csvdblink.Main</mainClass>
+					<mainClass>io.github.yok.flexdblink.Main</mainClass>
 				</configuration>
 				<executions>
 					<execution>
