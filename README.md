@@ -1,37 +1,51 @@
-# CsvDBLink
+# FlexDBLink
 
-CsvDBLink は、CSV とデータベースの往復（ロード／ダンプ）をシンプルにし、BLOB/CLOB 等の LOB も “外部ファイル参照” で扱えるツールです。CLI での一括投入／取得に加えて、JUnit 5 のテスト実行時に CSV を自動投入し、テスト後にロールバックする拡張も提供します。
+**FlexDBLink** は、開発・テスト工程における「DBデータの用意と検証」を圧倒的に効率化するデータ管理ツールです。
+CSV/JSON/YAML/XML などのシンプルなテキストファイルを使って、データベースへの **一括ロード／ダンプ** を誰でも簡単に実行できます。
+さらに BLOB/CLOB などの大容量 LOB データも「外部ファイル参照」で直感的に扱えるため、アプリケーションの実運用データを忠実に再現できます。
 
-CsvDBLink simplifies CSV ↔ database round-trips (load/dump) and supports LOBs (BLOB/CLOB) via external file references. In addition to a CLI for bulk loading and dumping, it includes a JUnit 5 extension that auto-loads CSVs during tests and rolls back changes afterward.
+CLI によるバッチ投入・取得はもちろん、JUnit 5 拡張機能を利用すれば **テストケース単位でのデータ準備と自動ロールバック** が可能。
+これにより「テスト前後のDB状態管理」や「シナリオごとのデータ切り替え」がスムーズになり、手作業のデータ調整から解放されます。
+そして最大の強みは、**SQL スクリプトに依存せず、テキストデータとして一元管理できるため、Git などで容易に構成管理・差分追跡・再現性の確保ができること**です。
+
+---
+
+**FlexDBLink** is a powerful yet lightweight tool designed to **streamline database test data management**.
+It enables seamless **round-trips between DB and structured files** (CSV/JSON/YAML/XML), making it effortless to load datasets into your database or dump them back into files for inspection and reuse.
+Even large **LOBs (BLOB/CLOB)** are handled intuitively through external file references, so you can reproduce production-like data with ease.
+
+Beyond bulk loading/dumping via the CLI, FlexDBLink provides a **JUnit 5 extension** that automatically loads datasets before test execution and rolls back afterward.
+This ensures **reliable, reproducible, and isolated test environments**, eliminating the hassle of manual data setup and cleanup.
+Most importantly, its greatest strength lies in the fact that **you no longer need to rely on handwritten SQL scripts — datasets are managed as plain text files, enabling easy version control with Git, clear diff tracking, and reproducibility across environments**.
 
 ---
 
 ## 特長
 
-* **Load & Dump**: CSVファイル から DB へデータロードします。また、DB から CSVファイルとしてデータ取得できます。LOBデータをファイルとして管理し、データロードおよびデータ取得できます。
-* **LOB は外部ファイルで**: CSV セルに `file:...` と書けば、`files/` ディレクトリの実体とリンクします。
+* **Load & Dump**: CSV / JSON / YAML / XML ファイルから DB へデータロードします。また、DB から CSV/JSON/YAML/XML ファイルとしてデータ取得できます。LOBデータをファイルとして管理し、データロードおよびデータ取得できます。
+* **LOB は外部ファイルで**: データセルに `file:...` と書けば、`files/` ディレクトリの実体とリンクします。
 * **2 段階ロード**（初期投入 `pre` とシナリオ追加入力）＋ シナリオ時は **既存重複の削除＋新規 INSERT のみ**を実施します。
-* **テーブル順序自動化**: `DBUnit`用の`table-ordering.txt` が無ければ CSV 群から自動生成します。
-* **JUnit 5 拡張**: `@LoadCsvData` でテストケースごとに CSV を投入。SpringTestのトランザクション制御に従います。
+* **テーブル順序自動化**: `DBUnit` 用の `table-ordering.txt` が無ければ データセット群から自動生成します。
+* **JUnit 5 拡張**: `@LoadData` でテストケースごとに データファイルを投入。SpringTestのトランザクション制御に従います。
 * **Oracle 対応**: INTERVAL/TIMESTAMP/TZ の正規化、BLOB/CLOB の JDBC 標準 API での投入などを実装しています。
 
 ## Features
 
-* **Load & Dump**: Load data from CSV files into the DB, and export data from the DB as CSV files. LOB data is managed as external files and can be both loaded and exported.
-* **External LOB files**: If a CSV cell contains `file:...`, it links to the actual file under the `files/` directory.
+* **Load & Dump**: Load data from CSV / JSON / YAML / XML files into the DB, and export data from the DB as CSV/JSON/YAML/XML files. LOB data is managed as external files and can be both loaded and exported.
+* **External LOB files**: If a dataset cell contains `file:...`, it links to the actual file under the `files/` directory.
 * **Two-phase loading**: Initial `pre` load plus scenario-specific additions; during scenarios, **remove existing duplicates and perform INSERT-only**.
-* **Automated table ordering**: If `table-ordering.txt` for DBUnit is missing, it’s auto-generated from the CSV set.
-* **JUnit 5 extension**: Use `@LoadCsvData` to load CSVs per test case; adheres to Spring Test transaction management.
+* **Automated table ordering**: If `table-ordering.txt` for DBUnit is missing, it’s auto-generated from the dataset set.
+* **JUnit 5 extension**: Use `@LoadData` to load datasets per test case; adheres to Spring Test transaction management.
 * **Oracle support**: Normalization for INTERVAL/TIMESTAMP/TZ types and LOB insertion via standard JDBC APIs (BLOB/CLOB).
 
 ---
 
 ## 前提
 
-- **Java 11+**（`JAVA_HOME` を JDK 11 以上に設定）
-- **Apache Maven 3.9+**（CLI ツールのビルドに使用します。例: 3.9.10）
-- **Oracle JDBC Driver**（`oracle.jdbc.OracleDriver`）
-- **OS**: Windows / macOS / Linux いずれでも可
+* **Java 11+**（`JAVA_HOME` を JDK 11 以上に設定）
+* **Apache Maven 3.9+**（CLI ツールのビルドに使用します。例: 3.9.10）
+* **Oracle JDBC Driver**（`oracle.jdbc.OracleDriver`）
+* **OS**: Windows / macOS / Linux いずれでも可
 
 > 現状の方言実装は **Oracle を主対象**に最適化しています。その他 RDB は順次対応予定です。
 
@@ -56,26 +70,25 @@ mvn clean package -Dmaven.test.skip=true
 
 **Artifacts (in `target/`) / 生成物**
 
-* `csvdblink-0.0.1-all.jar` — Shaded JAR（依存込み／推奨の実行ファイル）
-* `CsvDBLink-exec.jar` — Spring Boot fat-jar
-* `CsvDBLink.jar` — thin-jar（依存を別途クラスパスに用意する場合）
-* `CsvDBLink-sources.jar` — ソース JAR
-* `CsvDBLink-distribution.zip` — 配布用 ZIP
+* `flexdblink.jar` — 実行 JAR（配布 ZIP に含まれる）
+* `FlexDBLink-sources.jar` — ソース JAR
+* `FlexDBLink-distribution.zip` — 配布用 ZIP
+  （ZIP 展開後は `FlexDBLink/` 直下に `flexdblink.jar` と `conf/application.yml` が配置されます）
+
+---
 
 ## CLI の使い方 / CLI Usage
 
-ビルドで生成される **`csvdblink.jar`** を使います。
+ビルドで生成される **`flexdblink.jar`** を使います。
 
 ### コマンド
 
 ```bash
 # ロード（シナリオ省略時は application.yml の pre-dir-name を使用、通常 "pre"）
-# Load (if the scenario is omitted, use pre-dir-name in application.yml, typically pre)
-java -jar csvdblink.jar --load [<scenario>] --target DB1,DB2
+java -jar flexdblink.jar --load [<scenario>] --target DB1,DB2
 
 # ダンプ（シナリオ指定が必須）
-# Dump (scenario name is required)
-java -jar csvdblink.jar --dump <scenario> --target DB1,DB2
+java -jar flexdblink.jar --dump <scenario> --target DB1,DB2
 ```
 
 * `--load` / `-l`：ロードモード。`<scenario>` を省略すると `pre` を使用。
@@ -84,7 +97,7 @@ java -jar csvdblink.jar --dump <scenario> --target DB1,DB2
 
 > **注意**: コマンドラインからの Spring プロパティ上書きは無効化しています。**設定は `application.yml` に記述**してください。
 
---- 
+---
 
 * `--load` / `-l`: Load mode. Uses `pre` if `<scenario>` is omitted.
 * `--dump` / `-d`: Dump mode. **Scenario name required**.
@@ -94,8 +107,8 @@ java -jar csvdblink.jar --dump <scenario> --target DB1,DB2
 
 ## dockerコンテナを用いたCLI利用手順 / CLI Usage Guide with a Docker Container
 
-- **[Oracle 19c（Docker）環境構築と CsvDBLink サンプル実行](script/README_jp.md)**
-- **[Set Up Oracle 19c (Docker) and Run the CsvDBLink Sample](script/README_en.md)**
+- **[Oracle 19c（Docker）環境構築と FlexDBLink サンプル実行](script/README_jp.md)**
+- **[Set Up Oracle 19c (Docker) and Run the FlexDBLink Sample](script/README_en.md)**
 
 ### CLI 実行結果
 
@@ -103,7 +116,7 @@ java -jar csvdblink.jar --dump <scenario> --target DB1,DB2
 <summary><strong>ロード実行例</strong>（<code>--load COMMON</code>）</summary>
 
 ```bash
-$ java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load COMMON
+$ java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --load COMMON
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -113,78 +126,94 @@ $ java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load 
  =========|_|==============|___/=/_/_/_/
  :: Spring Boot ::               (v2.7.18)
 
-2025-08-16 19:44:04.983  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : Starting Main v0.0.1 using Java 11.0.27 on okawauchi with PID 93069 (CsvDBLink/script/CsvDBLink/csvdblink.jar started by okawauchi in CsvDBLink/script/CsvDBLink)
-2025-08-16 19:44:04.987  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : No active profile set, falling back to 1 default profile: "default"
-2025-08-16 19:44:05.540  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : Started Main in 0.959 seconds (JVM running for 1.308)
-2025-08-16 19:44:05.542  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : Application started. Args: [--load, COMMON]
-2025-08-16 19:44:05.543  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : Mode: load, Scenario: COMMON, Target DBs: [DB1]
-2025-08-16 19:44:05.543  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : Starting data load. Scenario [COMMON], Target DBs [DB1]
-2025-08-16 19:44:05.545  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : === DataLoader started (mode=COMMON, target DBs=[DB1]) ===
-2025-08-16 19:44:06.193  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : table-ordering.txt already exists (CSV count matches): load/pre/DB1/table-ordering.txt
-2025-08-16 19:44:06.214  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Excluded tables: [flyway_schema_history]
-2025-08-16 19:44:06.654  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] CSV rows=2
-2025-08-16 19:44:06.655  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/BINARY_TEST_TABLE.csv
-2025-08-16 19:44:08.209  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] Initial | inserted=2
-2025-08-16 19:44:08.218  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] CSV rows=2
-2025-08-16 19:44:08.218  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/CHAR_CLOB_TEST_TABLE.csv
-2025-08-16 19:44:08.276  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] Initial | inserted=2
-2025-08-16 19:44:08.285  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] CSV rows=4
-2025-08-16 19:44:08.285  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/DATE_TIME_TEST_TABLE.csv
-2025-08-16 19:44:08.381  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] Initial | inserted=4
-2025-08-16 19:44:08.388  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] CSV rows=2
-2025-08-16 19:44:08.389  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/NO_PK_TABLE.csv
-2025-08-16 19:44:08.423  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] Initial | inserted=2
-2025-08-16 19:44:08.430  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] CSV rows=3
-2025-08-16 19:44:08.430  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/NUMERIC_TEST_TABLE.csv
-2025-08-16 19:44:08.455  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] Initial | inserted=3
-2025-08-16 19:44:08.461  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] CSV rows=2
-2025-08-16 19:44:08.461  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/SAMPLE_BLOB_TABLE.csv
-2025-08-16 19:44:08.485  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] Initial | inserted=2
-2025-08-16 19:44:08.491  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] CSV rows=6
-2025-08-16 19:44:08.491  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/VARCHAR2_CHAR_TEST_TABLE.csv
-2025-08-16 19:44:08.523  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] Initial | inserted=6
-2025-08-16 19:44:08.529  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] CSV rows=2
-2025-08-16 19:44:08.530  INFO 93069 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   Extracting LOB columns from: load/pre/DB1/XML_JSON_TEST_TABLE.csv
-2025-08-16 19:44:08.561  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] Initial | inserted=2
-2025-08-16 19:44:08.566  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : table-ordering.txt already exists (CSV count matches): load/COMMON/DB1/table-ordering.txt
-2025-08-16 19:44:08.568  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Excluded tables: [flyway_schema_history]
-2025-08-16 19:44:08.645  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] CSV rows=4
-2025-08-16 19:44:08.695  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] Deleted duplicates by primary key → 2
-2025-08-16 19:44:08.698  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] Scenario (INSERT only) | inserted=2
-2025-08-16 19:44:08.703  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] CSV rows=2
-2025-08-16 19:44:08.723  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] Deleted duplicates by primary key → 1
-2025-08-16 19:44:08.732  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] Scenario (INSERT only) | inserted=1
-2025-08-16 19:44:08.736  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] CSV rows=4
-2025-08-16 19:44:08.770  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] Deleted duplicates by primary key → 3
-2025-08-16 19:44:08.775  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] Scenario (INSERT only) | inserted=1
-2025-08-16 19:44:08.781  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] CSV rows=4
-2025-08-16 19:44:08.889  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] Deleted duplicates by all columns → 2
-2025-08-16 19:44:08.892  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] Scenario (INSERT only) | inserted=2
-2025-08-16 19:44:08.897  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] CSV rows=5
-2025-08-16 19:44:08.916  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] Deleted duplicates by primary key → 3
-2025-08-16 19:44:08.919  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] Scenario (INSERT only) | inserted=2
-2025-08-16 19:44:08.923  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] CSV rows=2
-2025-08-16 19:44:08.941  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] Deleted duplicates by primary key → 1
-2025-08-16 19:44:08.943  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] Scenario (INSERT only) | inserted=1
-2025-08-16 19:44:08.948  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] CSV rows=4
-2025-08-16 19:44:08.967  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] Deleted duplicates by primary key → 4
-2025-08-16 19:44:08.967  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] Scenario (INSERT only) | inserted=0
-2025-08-16 19:44:08.972  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] CSV rows=1
-2025-08-16 19:44:08.990  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] Deleted duplicates by primary key → 1
-2025-08-16 19:44:08.991  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] Scenario (INSERT only) | inserted=0
-2025-08-16 19:44:08.994  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : === DataLoader finished ===
-2025-08-16 19:44:08.994  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : ===== Summary =====
-2025-08-16 19:44:08.994  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : DB[DB1]:
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[BINARY_TEST_TABLE       ] Total=2
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[CHAR_CLOB_TEST_TABLE    ] Total=2
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[DATE_TIME_TEST_TABLE    ] Total=2
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[NO_PK_TABLE             ] Total=2
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[NUMERIC_TEST_TABLE      ] Total=2
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[SAMPLE_BLOB_TABLE       ] Total=2
-2025-08-16 19:44:08.998  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[VARCHAR2_CHAR_TEST_TABLE] Total=2
-2025-08-16 19:44:08.999  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  :   Table[XML_JSON_TEST_TABLE     ] Total=1
-2025-08-16 19:44:08.999  INFO 93069 --- [           main] io.github.yok.csvdblink.core.DataLoader  : == Data loading to all DBs has completed ==
-2025-08-16 19:44:08.999  INFO 93069 --- [           main] io.github.yok.csvdblink.Main             : Data load completed. Scenario [COMMON]
+2025-08-17 23:53:28.743  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : Starting Main v0.1.0 using Java 11.0.27 on okawauchi with PID 24625
+2025-08-17 23:53:28.745  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : No active profile set, falling back to 1 default profile: "default"
+2025-08-17 23:53:29.287  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : Started Main in 0.938 seconds (JVM running for 1.311)
+2025-08-17 23:53:29.289  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : Application started. Args: [--load, COMMON]
+2025-08-17 23:53:29.290  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : Mode: load, Scenario: COMMON, Target DBs: [DB1]
+2025-08-17 23:53:29.291  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : Starting data load. Scenario [COMMON], Target DBs [DB1]
+2025-08-17 23:53:29.293  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : === DataLoader started (mode=COMMON, target DBs=[DB1]) ===
+2025-08-17 23:53:29.947  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : Generated table-ordering.txt: load/pre/DB1/table-ordering.txt
+2025-08-17 23:53:29.953  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Excluded tables: [flyway_schema_history]
+2025-08-17 23:53:30.039  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: BINARY_TEST_TABLE.csv
+2025-08-17 23:53:30.059  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] rows=2
+2025-08-17 23:53:30.060  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/BINARY_TEST_TABLE.csv
+2025-08-17 23:53:30.193  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] Initial | inserted=2
+2025-08-17 23:53:30.196  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: CHAR_CLOB_TEST_TABLE.csv
+2025-08-17 23:53:30.198  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] rows=2
+2025-08-17 23:53:30.198  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/CHAR_CLOB_TEST_TABLE.csv
+2025-08-17 23:53:30.245  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] Initial | inserted=2
+2025-08-17 23:53:30.247  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: DATE_TIME_TEST_TABLE.csv
+2025-08-17 23:53:30.249  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] rows=4
+2025-08-17 23:53:30.249  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/DATE_TIME_TEST_TABLE.csv
+2025-08-17 23:53:30.281  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] Initial | inserted=4
+2025-08-17 23:53:30.283  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: NO_PK_TABLE.csv
+2025-08-17 23:53:30.285  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] rows=2
+2025-08-17 23:53:30.285  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/NO_PK_TABLE.csv
+2025-08-17 23:53:30.306  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] Initial | inserted=2
+2025-08-17 23:53:30.308  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: NUMERIC_TEST_TABLE.csv
+2025-08-17 23:53:30.310  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] rows=3
+2025-08-17 23:53:30.310  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/NUMERIC_TEST_TABLE.csv
+2025-08-17 23:53:30.332  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] Initial | inserted=3
+2025-08-17 23:53:30.334  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: SAMPLE_BLOB_TABLE.csv
+2025-08-17 23:53:30.336  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] rows=2
+2025-08-17 23:53:30.336  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/SAMPLE_BLOB_TABLE.csv
+2025-08-17 23:53:30.358  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] Initial | inserted=2
+2025-08-17 23:53:30.359  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: VARCHAR2_CHAR_TEST_TABLE.csv
+2025-08-17 23:53:30.361  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] rows=6
+2025-08-17 23:53:30.361  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/VARCHAR2_CHAR_TEST_TABLE.csv
+2025-08-17 23:53:30.391  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] Initial | inserted=6
+2025-08-17 23:53:30.393  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: XML_JSON_TEST_TABLE.csv
+2025-08-17 23:53:30.394  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] rows=2
+2025-08-17 23:53:30.394  INFO 24625 --- [           main] i.g.y.f.db.OracleDialectHandler          :   Extracting LOB columns from: load/pre/DB1/XML_JSON_TEST_TABLE.csv
+2025-08-17 23:53:30.423  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] Initial | inserted=2
+2025-08-17 23:53:30.427  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : Generated table-ordering.txt: load/COMMON/DB1/table-ordering.txt
+2025-08-17 23:53:30.428  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Excluded tables: [flyway_schema_history]
+2025-08-17 23:53:30.502  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: BINARY_TEST_TABLE.csv
+2025-08-17 23:53:30.504  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] rows=4
+2025-08-17 23:53:30.554  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] Deleted duplicates by primary key → 2
+2025-08-17 23:53:30.558  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[BINARY_TEST_TABLE] Scenario (INSERT only) | inserted=2
+2025-08-17 23:53:30.560  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: CHAR_CLOB_TEST_TABLE.csv
+2025-08-17 23:53:30.561  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] rows=2
+2025-08-17 23:53:30.580  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] Deleted duplicates by primary key → 1
+2025-08-17 23:53:30.588  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[CHAR_CLOB_TEST_TABLE] Scenario (INSERT only) | inserted=1
+2025-08-17 23:53:30.590  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: DATE_TIME_TEST_TABLE.csv
+2025-08-17 23:53:30.592  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] rows=4
+2025-08-17 23:53:30.622  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] Deleted duplicates by primary key → 3
+2025-08-17 23:53:30.625  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[DATE_TIME_TEST_TABLE] Scenario (INSERT only) | inserted=1
+2025-08-17 23:53:30.626  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: NO_PK_TABLE.csv
+2025-08-17 23:53:30.628  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] rows=4
+2025-08-17 23:53:30.736  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] Deleted duplicates by all columns → 2
+2025-08-17 23:53:30.739  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NO_PK_TABLE] Scenario (INSERT only) | inserted=2
+2025-08-17 23:53:30.741  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: NUMERIC_TEST_TABLE.csv
+2025-08-17 23:53:30.742  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] rows=5
+2025-08-17 23:53:30.761  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] Deleted duplicates by primary key → 3
+2025-08-17 23:53:30.765  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[NUMERIC_TEST_TABLE] Scenario (INSERT only) | inserted=2
+2025-08-17 23:53:30.766  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: SAMPLE_BLOB_TABLE.csv
+2025-08-17 23:53:30.768  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] rows=2
+2025-08-17 23:53:30.786  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] Deleted duplicates by primary key → 1
+2025-08-17 23:53:30.790  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[SAMPLE_BLOB_TABLE] Scenario (INSERT only) | inserted=1
+2025-08-17 23:53:30.792  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: VARCHAR2_CHAR_TEST_TABLE.csv
+2025-08-17 23:53:30.794  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] rows=4
+2025-08-17 23:53:30.813  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] Deleted duplicates by primary key → 4
+2025-08-17 23:53:30.813  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] Scenario (INSERT only) | inserted=0
+2025-08-17 23:53:30.815  INFO 24625 --- [           main] i.g.y.f.parser.DataLoaderFactory         : Resolved dataset file: XML_JSON_TEST_TABLE.csv
+2025-08-17 23:53:30.817  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] rows=1
+2025-08-17 23:53:30.833  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] Deleted duplicates by primary key → 1
+2025-08-17 23:53:30.833  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : [DB1] Table[XML_JSON_TEST_TABLE] Scenario (INSERT only) | inserted=0
+2025-08-17 23:53:30.836  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : === DataLoader finished ===
+2025-08-17 23:53:30.837  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : ===== Summary =====
+2025-08-17 23:53:30.837  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : DB[DB1]:
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[BINARY_TEST_TABLE       ] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[CHAR_CLOB_TEST_TABLE    ] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[DATE_TIME_TEST_TABLE    ] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[NO_PK_TABLE             ] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[NUMERIC_TEST_TABLE      ] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[SAMPLE_BLOB_TABLE       ] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[VARCHAR2_CHAR_TEST_TABLE] Total=2
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  :   Table[XML_JSON_TEST_TABLE     ] Total=1
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] i.github.yok.flexdblink.core.DataLoader  : == Data loading to all DBs has completed ==
+2025-08-17 23:53:30.841  INFO 24625 --- [           main] io.github.yok.flexdblink.Main            : Data load completed. Scenario [COMMON]
 ```
 
 </details>
@@ -193,7 +222,7 @@ $ java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load 
 <summary><strong>ダンプ例</strong>（<code>--dump COMMON</code>）</summary>
 
 ```bash
-$ java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --dump COMMON
+$ java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --dump COMMON
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -203,53 +232,52 @@ $ java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --dump 
  =========|_|==============|___/=/_/_/_/
  :: Spring Boot ::               (v2.7.18)
 
-2025-08-16 19:44:41.924  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : Starting Main v0.0.1 using Java 11.0.27 on okawauchi with PID 93620 (CsvDBLink/script/CsvDBLink/csvdblink.jar started by okawauchi in CsvDBLink/script/CsvDBLink)
-2025-08-16 19:44:41.926  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : No active profile set, falling back to 1 default profile: "default"
-2025-08-16 19:44:42.485  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : Started Main in 0.953 seconds (JVM running for 1.308)
-2025-08-16 19:44:42.487  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : Application started. Args: [--dump, COMMON]
-2025-08-16 19:44:42.488  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : Mode: dump, Scenario: COMMON, Target DBs: [DB1]
-2025-08-16 19:44:42.489  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : Starting data dump. Scenario [COMMON], Target DBs [[DB1]]
-2025-08-16 19:44:42.498  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : Backed up existing dump output directory: dump/COMMON → dump/COMMON_20250816194442490
-2025-08-16 19:44:42.498  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] === DB dump started ===
-2025-08-16 19:44:44.409  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[BINARY_TEST_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.445  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/sample3.bin
-2025-08-16 19:44:44.447  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/sample4.bin
-2025-08-16 19:44:44.452  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[BINARY_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=2
-2025-08-16 19:44:44.470  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[CHAR_CLOB_TEST_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.477  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/char_clob_2.clob
-2025-08-16 19:44:44.478  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/char_clob_2.nclob
-2025-08-16 19:44:44.480  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/char_clob_3.clob
-2025-08-16 19:44:44.481  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/char_clob_3.nclob
-2025-08-16 19:44:44.485  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[CHAR_CLOB_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=4
-2025-08-16 19:44:44.525  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[DATE_TIME_TEST_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.565  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[DATE_TIME_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
-2025-08-16 19:44:44.574  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[NO_PK_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.582  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[NO_PK_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
-2025-08-16 19:44:44.595  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[NUMERIC_TEST_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.601  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[NUMERIC_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
-2025-08-16 19:44:44.614  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[SAMPLE_BLOB_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.619  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/LeapSecond_3.dat
-2025-08-16 19:44:44.620  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/LeapSecond_2.dat
-2025-08-16 19:44:44.624  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[SAMPLE_BLOB_TABLE] dumped-records=2, BLOB/CLOB file-outputs=2
-2025-08-16 19:44:44.634  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.645  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
-2025-08-16 19:44:44.657  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[XML_JSON_TEST_TABLE] CSV dump completed (UTF-8)
-2025-08-16 19:44:44.662  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/json_data_1.json
-2025-08-16 19:44:44.662  INFO 93620 --- [           main] i.g.y.csvdblink.db.OracleDialectHandler  :   LOB file written: dump/COMMON/DB1/files/xml_data_1.xml
-2025-08-16 19:44:44.666  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] Table[XML_JSON_TEST_TABLE] dumped-records=1, BLOB/CLOB file-outputs=2
-2025-08-16 19:44:44.666  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : ===== Summary =====
-2025-08-16 19:44:44.666  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : DB[DB1]:
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[BINARY_TEST_TABLE       ] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[CHAR_CLOB_TEST_TABLE    ] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[DATE_TIME_TEST_TABLE    ] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[NO_PK_TABLE             ] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[NUMERIC_TEST_TABLE      ] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[SAMPLE_BLOB_TABLE       ] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[VARCHAR2_CHAR_TEST_TABLE] Total=2
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  :   Table[XML_JSON_TEST_TABLE     ] Total=1
-2025-08-16 19:44:44.671  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : [DB1] === DB dump completed ===
-2025-08-16 19:44:44.674  INFO 93620 --- [           main] io.github.yok.csvdblink.core.DataDumper  : === All DB dumps completed: Output [dump/COMMON] ===
-2025-08-16 19:44:44.674  INFO 93620 --- [           main] io.github.yok.csvdblink.Main             : Data dump completed. Scenario [COMMON]
+2025-08-17 23:47:06.192  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : Starting Main v0.1.0 using Java 11.0.27 on okawauchi with PID 19573
+2025-08-17 23:47:06.195  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : No active profile set, falling back to 1 default profile: "default"
+2025-08-17 23:47:06.752  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : Started Main in 0.974 seconds (JVM running for 1.361)
+2025-08-17 23:47:06.754  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : Application started. Args: [--dump, COMMON]
+2025-08-17 23:47:06.755  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : Mode: dump, Scenario: COMMON, Target DBs: [DB1]
+2025-08-17 23:47:06.756  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : Starting data dump. Scenario [COMMON], Target DBs [[DB1]]
+2025-08-17 23:47:06.758  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] === DB dump started ===
+2025-08-17 23:47:07.559  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[BINARY_TEST_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.591  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/sample3.bin
+2025-08-17 23:47:07.593  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/sample4.bin
+2025-08-17 23:47:07.599  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[BINARY_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=2
+2025-08-17 23:47:07.610  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[CHAR_CLOB_TEST_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.616  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/char_clob_2.clob
+2025-08-17 23:47:07.617  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/char_clob_2.nclob
+2025-08-17 23:47:07.618  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/char_clob_3.clob
+2025-08-17 23:47:07.618  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/char_clob_3.nclob
+2025-08-17 23:47:07.623  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[CHAR_CLOB_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=4
+2025-08-17 23:47:07.662  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[DATE_TIME_TEST_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.687  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[DATE_TIME_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
+2025-08-17 23:47:07.693  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[NO_PK_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.699  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[NO_PK_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
+2025-08-17 23:47:07.708  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[NUMERIC_TEST_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.713  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[NUMERIC_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
+2025-08-17 23:47:07.723  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[SAMPLE_BLOB_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.726  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/LeapSecond_3.dat
+2025-08-17 23:47:07.727  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/LeapSecond_2.dat
+2025-08-17 23:47:07.730  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[SAMPLE_BLOB_TABLE] dumped-records=2, BLOB/CLOB file-outputs=2
+2025-08-17 23:47:07.739  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.747  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[VARCHAR2_CHAR_TEST_TABLE] dumped-records=2, BLOB/CLOB file-outputs=0
+2025-08-17 23:47:07.756  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[XML_JSON_TEST_TABLE] CSV dump completed (UTF-8)
+2025-08-17 23:47:07.760  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/json_data_1.json
+2025-08-17 23:47:07.760  INFO 19573 --- [           main] i.g.y.f.db.OracleDialectHandler          :   LOB file written: dump/COMMON/DB1/files/xml_data_1.xml
+2025-08-17 23:47:07.763  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] Table[XML_JSON_TEST_TABLE] dumped-records=1, BLOB/CLOB file-outputs=2
+2025-08-17 23:47:07.764  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : ===== Summary =====
+2025-08-17 23:47:07.764  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : DB[DB1]:
+2025-08-17 23:47:07.769  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[BINARY_TEST_TABLE       ] Total=2
+2025-08-17 23:47:07.769  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[CHAR_CLOB_TEST_TABLE    ] Total=2
+2025-08-17 23:47:07.769  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[DATE_TIME_TEST_TABLE    ] Total=2
+2025-08-17 23:47:07.769  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[NO_PK_TABLE             ] Total=2
+2025-08-17 23:47:07.769  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[NUMERIC_TEST_TABLE      ] Total=2
+2025-08-17 23:47:07.769  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[SAMPLE_BLOB_TABLE       ] Total=2
+2025-08-17 23:47:07.770  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[VARCHAR2_CHAR_TEST_TABLE] Total=2
+2025-08-17 23:47:07.770  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  :   Table[XML_JSON_TEST_TABLE     ] Total=1
+2025-08-17 23:47:07.770  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : [DB1] === DB dump completed ===
+2025-08-17 23:47:07.772  INFO 19573 --- [           main] i.github.yok.flexdblink.core.DataDumper  : === All DB dumps completed: Output [dump/COMMON] ===
+2025-08-17 23:47:07.772  INFO 19573 --- [           main] io.github.yok.flexdblink.Main            : Data dump completed. Scenario [COMMON]
 ```
 
 </details>
@@ -294,7 +322,7 @@ $ java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --dump 
 
 ## 設定ファイル（`application.yml`）
 
-CsvDBLink の CLI は **`application.yml`** を読み込んで動作します（標準の Spring Boot 外部設定解決に準拠）。
+FlexDBLink の CLI は **`application.yml`** を読み込んで動作します（標準の Spring Boot 外部設定解決に準拠）。
 主な探索場所: 実行ディレクトリ直下、`./config/`、クラスパス内 など。
 
 > **Note**: `Main` はコマンドライン引数による Spring のプロパティ上書きを無効化（`setAddCommandLineProperties(false)`）。
@@ -304,7 +332,7 @@ CsvDBLink の CLI は **`application.yml`** を読み込んで動作します（
 
 ## Configuration file (`application.yml`)
 
-The CsvDBLink CLI operates by loading **`application.yml`**, adhering to Spring Boot’s standard externalized configuration resolution.
+The FlexDBLink CLI operates by loading **`application.yml`**, adhering to Spring Boot’s standard externalized configuration resolution.
 Primary lookup locations include: the working directory, `./config/`, and the classpath.
 
 > **Note**: `Main` disables overriding Spring properties via command-line arguments (`setAddCommandLineProperties(false)`). Please **manage settings in the YAML file**.
@@ -399,18 +427,32 @@ dump:
   ```
 
 ---
-
 ## JUnit 5 サポート
 
-`@LoadCsvData` アノテーションで、テスト実行前に CSV/ファイルを自動投入し、テスト後にロールバックされます。
-Spring を利用している場合は、テスト用トランザクション（@Transactional）に参加します。Spring を利用していない場合は、本拡張が独自に接続を管理し、テストクラスの終了時に一括ロールバックします。
+`@LoadData` アノテーションを付与すると、テスト実行前に **CSV / JSON / YAML / XML** などのデータファイルを自動投入し、テスト終了時に自動的にロールバックされます。
+Spring のテストトランザクション（`@Transactional`）に参加するため、各テストメソッドの終了時点で確実にデータベースの状態が元に戻ります。
+
+`@LoadData` は **クラスレベル** と **メソッドレベル** の両方に付与できます。
+
+* クラスに付与した場合、そのテストクラス全体に対してデータ投入が行われます。
+* メソッドに付与した場合、そのテストメソッド専用のデータ投入が行われます。
+
+この仕組みにより、テストデータは **SQL スクリプトを記述せずにテキストファイルで管理**でき、Git などによる構成管理・差分追跡・環境再現が容易になります。
 
 ---
-
 ## JUnit 5 Support
 
-Using the `@LoadCsvData` annotation, CSVs/files are automatically loaded before test execution and rolled back afterward.
-When Spring is in use, it participates in the test transaction (`@Transactional`). Without Spring, the extension manages its own connections and performs a bulk rollback at the end of the test class.
+With the `@LoadData` annotation, **datasets (CSV / JSON / YAML / XML)** are automatically loaded before test execution and rolled back afterward.
+Because it integrates with Spring’s test transaction (`@Transactional`), the database state is reliably restored at the end of each test method.
+
+The `@LoadData` annotation can be placed on both the **class level** and the **method level**:
+
+* At the class level, data is loaded once for the entire test class.
+* At the method level, data is loaded specifically for that test method.
+
+This allows test data to be managed as plain text files — without writing SQL — enabling easy version control with Git, clear diff tracking, and reproducibility across environments.
+
+---
 
 ### Sample （MyBatis マッパーの読み取りテスト）
 
@@ -418,13 +460,16 @@ When Spring is in use, it participates in the test transaction (`@Transactional`
 @MybatisTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(BbbDataSourceDevelopmentConfig.class)
-@LoadCsvData(scenario = "NORMAL", dbNames = DbName.Constants.BBB)
+// クラス全体に適用
+@LoadData(scenario = "NORMAL", dbNames = DbName.Constants.BBB)
 class LeapSecondFileMapperTest {
 
     @Autowired
     private LeapSecondFileMapper mapper;
 
     @Test
+    // メソッド単位に適用
+    @LoadData(scenario = "NORMAL", dbNames = DbName.Constants.BBB)
     void selectLatest_正常ケース_指定fileNameの最新レコードが取得できること() {
         LeapSecondFileRecord record = mapper.selectLatest("test_file.txt");
 
@@ -446,13 +491,10 @@ src/test/resources/<パッケージ階層>/<テストクラス名>/<シナリオ
 src/test/resources/<パッケージ階層>/<テストクラス名>/files/*   # LOB 実体
 ```
 
-* `@LoadCsvData(scenario = "...", dbNames = "...")`
+* `@LoadData(scenario = "...", dbNames = "...")`
 
   * `scenario`: シナリオ（ディレクトリ）名
   * `dbNames`: 1 つまたは複数の DB 名（サブディレクトリ）。省略時は直下の全 DB フォルダを自動検出
-
-> Spring の `DataSource` を使わない場合でも、`application.properties` を読み込んで接続を確立します。
-> Spring 管理の `DataSource` をツールへ明示提供したい場合は `DataSourceRegistry` も利用できます。
 
 --- 
 
@@ -463,46 +505,52 @@ src/test/resources/<package path>/<TestClassName>/<scenario>/<dbName>/*.csv
 src/test/resources/<package path>/<TestClassName>/files/*   # LOB payloads
 ```
 
-* `@LoadCsvData(scenario = "...", dbNames = "...")`
+* `@LoadData(scenario = "...", dbNames = "...")`
 
   * `scenario`: Scenario (directory) name.
   * `dbNames`: One or more DB names (subdirectories). If omitted, all DB folders directly under the scenario are auto-detected.
-
-> Even when you don’t use Spring’s `DataSource`, the tool reads `application.properties` to establish connections.
-> If you want to explicitly provide Spring-managed `DataSource`s to the tool, you can also use `DataSourceRegistry`.
 
 ---
 
 ## ベストプラクティス
 
 * **`table-ordering.txt`**
-  参照制約を考慮した投入順序を明示化できます（1 行 1 テーブル名）。未配置なら CSV から自動生成。
+  外部キーなど参照制約を考慮した投入順序を明示化できます（1 行 1 テーブル名）。未配置の場合は、利用するデータファイル群（CSV/JSON/YAML/XML）から自動生成されます。
+
 * **除外テーブル**
-  `dump.exclude-tables` にマイグレーション管理テーブル等を追加。(CLI用)
+  マイグレーション管理テーブルなど、投入やダンプの対象外とすべきテーブルは `dump.exclude-tables` に指定してください。
+
 * **時刻フォーマットの統一**
-  `dbunit.csv.format.*` をチーム標準に合わせて設定。(CLI用)
+  日付・時刻のフォーマットは `dbunit.csv.format.*` で統一して設定しておくと、チーム全体でのデータ管理が安定します。
+
+* **テキストデータによる構成管理**
+  SQL スクリプトに依存せず、CSV/JSON/YAML/XML でデータを表現することで、Git 等による構成管理・差分追跡・環境再現が容易になります。
 
 ---
-
 ## Best Practices
 
 * **`table-ordering.txt`**
-  Explicitly define the load order with referential constraints in mind (one table name per line). If absent, it’s auto-generated from the CSV set.
+  Explicitly define the load order with referential constraints in mind (one table name per line). If missing, it is auto-generated from the dataset files (CSV/JSON/YAML/XML).
+
 * **Exclude tables**
-  Add migration/housekeeping tables to `dump.exclude-tables` (for CLI).
+  Exclude migration/housekeeping tables by listing them in `dump.exclude-tables`.
+
 * **Unified time formats**
-  Configure `dbunit.csv.format.*` to match your team’s standard (for CLI).
+  Configure `dbunit.csv.format.*` for consistent date/time formats across the team.
+
+* **Manage data as text files**
+  Instead of relying on SQL scripts, represent datasets as CSV/JSON/YAML/XML files. This enables version control with Git, easy diff tracking, and reproducibility across environments.
 
 ---
 
 ## 既知事項 / Notes
 
-* 内部で **DBUnit** を利用していますが、API は CsvDBLink で抽象化しています。
+* 内部で **DBUnit** を利用していますが、API は FlexDBLink で抽象化しています。
 * 現状は Oracle に最適化された実装です。その他 RDBMS への拡張は順次対応予定です。
 
 ---
 
-* Internally uses **DBUnit**, but the API is abstracted by CsvDBLink.
+* Internally uses **DBUnit**, but the API is abstracted by FlexDBLink.
 * The current implementation is optimized for Oracle; support for other RDBMS will be added progressively.
 
 ---

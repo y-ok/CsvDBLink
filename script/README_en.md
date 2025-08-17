@@ -1,4 +1,4 @@
-# Set Up Oracle 19c (Docker) and Run the CsvDBLink Sample
+# Set Up Oracle 19c (Docker) and Run the FlexDBLink Sample
 
 ## Build the Oracle 19c Docker Image (19.3.0-EE)
 
@@ -39,14 +39,7 @@ docker compose down
 docker compose down -v
 ```
 
-## Set the Data Path via Environment Variable
-
-```bash
-# Run at the repository root: set the absolute path to script/data
-export CSVDBLINK_DATA_PATH="$(pwd)/script/data"
-```
-
-## Deploy CsvDBLink into the script Folder
+## Deploy FlexDBLink into the script Folder
 
 ```bash
 cd <repo-root>
@@ -54,19 +47,19 @@ cd <repo-root>
 # Build from source and place artifacts (skip tests entirely)
 mvn clean package -Dmaven.test.skip=true
 cd target
-unzip CsvDBLink-distribution.zip
+unzip FlexDBLink-distribution.zip
 
-cp -pr CsvDBLink <repo-root>/script/.
+cp -pr FlexDBLink <repo-root>/script/.
 
 # Verify placement
-ls -1 <repo-root>/script/CsvDBLink
+ls -1 <repo-root>/script/FlexDBLink
 # conf/
-# csvdblink.jar
+# flexdblink.jar
 ```
 
 ## Update data-path (application.yml)
 
-**Location**: `script/CsvDBLink/conf/application.yml`
+**Location**: `script/FlexDBLink/conf/application.yml`
 
 ### Method: hard-code an absolute path
 
@@ -85,22 +78,22 @@ script/
 │  │  ├─ pre/DB1/{*.csv,files/*}
 │  │  └─ COMMON/DB1/{*.csv,files/*}
 │  └─ dump/COMMON/DB1/{*.csv,files/*}
-└─ CsvDBLink/
+└─ FlexDBLink/
    ├─ conf/application.yml
-   └─ csvdblink.jar
+   └─ flexdblink.jar
 ```
 
 ## Run with the Sample Data
 
 ```bash
-cd script/CsvDBLink
+cd script/FlexDBLink
 
 # Initial load (uses "pre")
-java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load
+java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --load
 
 # Scenario load (COMMON): delete duplicates + INSERT only
-java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load COMMON
+java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --load COMMON
 
 # Dump (COMMON): outputs CSV and LOB files
-java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --dump COMMON
+java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --dump COMMON
 ```
