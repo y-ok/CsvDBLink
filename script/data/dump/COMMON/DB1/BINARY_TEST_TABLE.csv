@@ -1,0 +1,3 @@
+ID,RAW_COL,LONG_RAW_COL,BLOB_COL
+3,DEADBEEF,,file:sample3.bin
+4,ABCDEF012345,,file:sample4.bin

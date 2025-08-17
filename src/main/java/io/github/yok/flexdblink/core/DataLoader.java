@@ -1,6 +1,5 @@
 package io.github.yok.flexdblink.core;
 
-import com.google.common.collect.Lists;
 import io.github.yok.flexdblink.config.ConnectionConfig;
 import io.github.yok.flexdblink.config.DbUnitConfig;
 import io.github.yok.flexdblink.config.DumpConfig;
@@ -8,10 +7,8 @@ import io.github.yok.flexdblink.config.PathsConfig;
 import io.github.yok.flexdblink.db.DbDialectHandler;
 import io.github.yok.flexdblink.db.DbUnitConfigFactory;
 import io.github.yok.flexdblink.db.LobResolvingTableWrapper;
-import io.github.yok.flexdblink.parser.CsvDataParser;
 import io.github.yok.flexdblink.parser.DataFormat;
 import io.github.yok.flexdblink.parser.DataLoaderFactory;
-import io.github.yok.flexdblink.parser.DataParser;
 import io.github.yok.flexdblink.util.ErrorHandler;
 import java.io.File;
 import java.io.IOException;
@@ -150,11 +147,15 @@ public class DataLoader {
     }
 
     /**
-     * Reads CSV/LOB from the specified directory. In <em>initial</em> mode, performs CLEAN_INSERT +
-     * UPDATE. In <em>scenario</em> mode, deletes rows that are duplicates of initial and INSERTs
-     * the remainder.
+     * Reads dataset (CSV/JSON/YAML/XML + LOB) from the specified directory.
      *
-     * @param dir directory where CSV/LOB are located
+     * <p>
+     * In <em>initial</em> mode, performs CLEAN_INSERT + UPDATE.<br>
+     * In <em>scenario</em> mode, deletes rows that are duplicates of initial and INSERTs the
+     * remainder.
+     * </p>
+     *
+     * @param dir directory where dataset files are located
      * @param dbId connections.id (for logging)
      * @param initial {@code true}=initial mode, {@code false}=scenario mode
      * @param entry JDBC connection info
@@ -169,35 +170,29 @@ public class DataLoader {
         }
 
         try {
+            // Ensure table-ordering.txt exists
             ensureTableOrdering(dir);
 
-            DataParser parser = new CsvDataParser();
-            IDataSet dataSet;
-            try {
-                dataSet = parser.parse(dir);
-            } catch (DataSetException e) {
-                log.warn("[{}] Failed to create CsvDataSet → skipping: {}", dbId, e.getMessage());
-                return;
-            }
+            // Load table list from table-ordering.txt
+            Path orderPath = new File(dir, "table-ordering.txt").toPath();
+            List<String> tables =
+                    Files.readAllLines(orderPath, StandardCharsets.UTF_8).stream().map(String::trim)
+                            .filter(s -> !s.isEmpty()).sorted().collect(Collectors.toList());
 
-            List<String> tables = Lists.newArrayList(dataSet.getTableNames());
             if (tables.isEmpty()) {
                 log.info("[{}] No tables → skipping", dbId);
                 return;
             }
-            tables.sort(String::compareTo);
 
+            // Exclude tables if configured
             if (dumpConfig != null && dumpConfig.getExcludeTables() != null
                     && !dumpConfig.getExcludeTables().isEmpty()) {
-                // Build a lowercase set for case-insensitive compares
                 final Set<String> excludeLower =
                         dumpConfig.getExcludeTables().stream().filter(Objects::nonNull)
                                 .map(s -> s.toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
 
-                // Log excluded targets
                 log.info("[{}] Excluded tables: {}", dbId, excludeLower);
 
-                // Remove excluded tables
                 tables = tables.stream()
                         .filter(t -> !excludeLower.contains(t.toLowerCase(Locale.ROOT)))
                         .collect(Collectors.toList());
@@ -216,174 +211,70 @@ public class DataLoader {
                 String schema = schemaNameResolver.apply(entry);
 
                 for (String table : tables) {
-                    dialectHandler.logTableDefinition(jdbc, schema, table, dbId);
+                    try {
+                        // 🔑 ファイル形式を自動判別して読み込み
+                        IDataSet dataSet = DataLoaderFactory.create(dir, table);
 
-                    ITable base = dataSet.getTable(table);
-                    int csvCount = base.getRowCount();
-                    log.info("[{}] Table[{}] CSV rows={}", dbId, table, csvCount);
+                        ITable base = dataSet.getTable(table);
+                        int rowCount = base.getRowCount();
+                        log.info("[{}] Table[{}] rows={}", dbId, table, rowCount);
 
-                    ITable wrapped = new LobResolvingTableWrapper(base, dir, dialectHandler);
-                    DefaultDataSet ds = new DefaultDataSet(wrapped);
+                        ITable wrapped = new LobResolvingTableWrapper(base, dir, dialectHandler);
+                        DefaultDataSet ds = new DefaultDataSet(wrapped);
 
-                    int inserted;
-                    if (initial) {
-                        // initial mode (CLEAN_INSERT + UPDATE)
-                        Column[] lobCols = dialectHandler.getLobColumns(dir.toPath(), table);
-                        if (lobCols.length > 0) {
-                            boolean anyNotNullLob = dialectHandler.hasNotNullLobColumn(jdbc, schema,
-                                    table, lobCols);
-                            if (anyNotNullLob) {
-                                log.info(
-                                        "[{}] Table[{}] NOT NULL LOB present → CLEAN_INSERT all columns",
-                                        dbId, table);
+                        if (initial) {
+                            // --- Initial mode (CLEAN_INSERT + UPDATE) ---
+                            Column[] lobCols = dialectHandler.getLobColumns(dir.toPath(), table);
+                            if (lobCols.length > 0) {
+                                boolean anyNotNullLob = dialectHandler.hasNotNullLobColumn(jdbc,
+                                        schema, table, lobCols);
+                                if (anyNotNullLob) {
+                                    log.info(
+                                            "[{}] Table[{}] NOT NULL LOB present → CLEAN_INSERT all columns",
+                                            dbId, table);
+                                    DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
+                                } else {
+                                    DatabaseOperation.CLEAN_INSERT.execute(dbConn,
+                                            new DefaultDataSet(DefaultColumnFilter
+                                                    .excludedColumnsTable(base, lobCols)));
+                                    DatabaseOperation.UPDATE.execute(dbConn, ds);
+                                }
+                            } else {
                                 DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
-                            } else {
-                                DatabaseOperation.CLEAN_INSERT.execute(dbConn, new DefaultDataSet(
-                                        DefaultColumnFilter.excludedColumnsTable(base, lobCols)));
-                                DatabaseOperation.UPDATE.execute(dbConn, ds);
                             }
+                            log.info("[{}] Table[{}] Initial | inserted={}", dbId, table, rowCount);
+
                         } else {
-                            DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
-                        }
-                        inserted = csvCount;
-                        log.info("[{}] Table[{}] Initial | inserted={}", dbId, table, inserted);
+                            // --- Scenario mode (delete duplicates + INSERT new) ---
+                            ITable originalDbTable = dbConn.createDataSet().getTable(table);
+                            List<String> pkCols =
+                                    dialectHandler.getPrimaryKeyColumns(jdbc, schema, table);
 
-                    } else {
-                        // scenario mode (delete duplicates + INSERT new)
-                        // --- 1) Snapshot of DB at pre-time ---
-                        ITable originalDbTable = dbConn.createDataSet().getTable(table);
+                            Map<Integer, Integer> identicalMap = detectDuplicates(wrapped,
+                                    originalDbTable, pkCols, jdbc, schema, table, dialectHandler);
 
-                        // --- 2) Query primary keys ---
-                        List<String> pkCols =
-                                dialectHandler.getPrimaryKeyColumns(jdbc, schema, table);
-
-                        // --- 3) Detect mapping of duplicate rows (CSV row → DB row) ---
-                        Map<Integer, Integer> identicalMap = new LinkedHashMap<>();
-                        Column[] cols = wrapped.getTableMetaData().getColumns();
-
-                        if (!pkCols.isEmpty()) {
-                            // With PK: match by keys
-                            for (int i = 0; i < wrapped.getRowCount(); i++) {
-                                for (int j = 0; j < originalDbTable.getRowCount(); j++) {
-                                    boolean match = true;
-                                    for (String pk : pkCols) {
-                                        Object v1 = wrapped.getValue(i, pk);
-                                        Object v2 = originalDbTable.getValue(j, pk);
-                                        if (v1 == null ? v2 != null : !v1.equals(v2)) {
-                                            match = false;
-                                            break;
-                                        }
-                                    }
-                                    if (match) {
-                                        identicalMap.put(i, j);
-                                        log.debug(
-                                                "[{}] Table[{}] Duplicate detected: csvRow={} matches dbRow={}",
-                                                dbId, table, i, j);
-                                        break;
-                                    }
-                                }
+                            if (!identicalMap.isEmpty()) {
+                                deleteDuplicates(jdbc, schema, table, pkCols,
+                                        wrapped.getTableMetaData().getColumns(), originalDbTable,
+                                        identicalMap, dialectHandler, dbId);
                             }
-                        } else {
-                            // No PK: determine equality by comparing all columns
-                            for (int i = 0; i < wrapped.getRowCount(); i++) {
-                                for (int j = 0; j < originalDbTable.getRowCount(); j++) {
-                                    // (1) per-column debug logs (unchanged detail)
-                                    for (Column col : cols) {
-                                        String colName = col.getColumnName();
-                                        String csvVal =
-                                                Optional.ofNullable(wrapped.getValue(i, colName))
-                                                        .map(Object::toString).orElse("").trim();
-                                        String dbVal = Optional
-                                                .ofNullable(originalDbTable.getValue(j, colName))
-                                                .map(Object::toString).orElse("").trim();
-                                        log.debug(
-                                                "[{}] Table[{}] Compare: csvRow={}, dbRow={}, column={}, csv=[{}], db=[{}]",
-                                                dbId, table, i, j, colName, csvVal, dbVal);
-                                    }
-                                    // (2) rowsEqual result
-                                    boolean match = rowsEqual(wrapped, originalDbTable, jdbc,
-                                            schema, table, i, j, cols, dialectHandler);
-                                    log.debug("[{}] Table[{}] rowsEqual(csvRow={}, dbRow={}) => {}",
-                                            dbId, table, i, j, match);
 
-                                    if (match) {
-                                        identicalMap.put(i, j);
-                                        log.debug(
-                                                "[{}] Table[{}] Duplicate detected: csvRow={} matches dbRow={}",
-                                                dbId, table, i, j);
-                                        break;
-                                    }
-                                }
-                            }
+                            FilteredTable filtered =
+                                    new FilteredTable(wrapped, identicalMap.keySet());
+                            DatabaseOperation.INSERT.execute(dbConn, new DefaultDataSet(filtered));
+                            log.info("[{}] Table[{}] Scenario (INSERT only) | inserted={}", dbId,
+                                    table, filtered.getRowCount());
                         }
 
-                        // --- 4) DELETE duplicates ---
-                        if (!identicalMap.isEmpty()) {
-                            String deleteSql;
-                            if (!pkCols.isEmpty()) {
-                                // DELETE with PK
-                                String where = pkCols.stream()
-                                        .map(c -> dialectHandler.quoteIdentifier(c) + " = ?")
-                                        .collect(Collectors.joining(" AND "));
-                                deleteSql = String.format("DELETE FROM %s.%s WHERE %s",
-                                        dialectHandler.quoteIdentifier(schema),
-                                        dialectHandler.quoteIdentifier(table), where);
-                                try (PreparedStatement ps = jdbc.prepareStatement(deleteSql)) {
-                                    for (Map.Entry<Integer, Integer> e : identicalMap.entrySet()) {
-                                        int dbRow = e.getValue();
-                                        // Bind only PK columns
-                                        for (int k = 0; k < pkCols.size(); k++) {
-                                            String pk = pkCols.get(k);
-                                            Object val = originalDbTable.getValue(dbRow, pk);
-                                            ps.setObject(k + 1, val);
-                                        }
-                                        ps.addBatch();
-                                    }
-                                    int deleted = Arrays.stream(ps.executeBatch()).sum();
-                                    log.info(
-                                            "[{}] Table[{}] Deleted duplicates by primary key → {}",
-                                            dbId, table, deleted);
-                                }
-                            } else {
-                                // DELETE with all columns
-                                String where =
-                                        Arrays.stream(cols)
-                                                .map(c -> dialectHandler.quoteIdentifier(
-                                                        c.getColumnName()) + " = ?")
-                                                .collect(Collectors.joining(" AND "));
-                                deleteSql = String.format("DELETE FROM %s.%s WHERE %s",
-                                        dialectHandler.quoteIdentifier(schema),
-                                        dialectHandler.quoteIdentifier(table), where);
-                                try (PreparedStatement ps = jdbc.prepareStatement(deleteSql)) {
-                                    for (Map.Entry<Integer, Integer> e : identicalMap.entrySet()) {
-                                        int dbRow = e.getValue();
-                                        for (int k = 0; k < cols.length; k++) {
-                                            Object val = originalDbTable.getValue(dbRow,
-                                                    cols[k].getColumnName());
-                                            ps.setObject(k + 1, val);
-                                        }
-                                        ps.addBatch();
-                                    }
-                                    int deleted = Arrays.stream(ps.executeBatch()).sum();
-                                    log.info(
-                                            "[{}] Table[{}] Deleted duplicates by all columns → {}",
-                                            dbId, table, deleted);
-                                }
-                            }
-                        }
+                        // Summary
+                        int currentCount = dialectHandler.countRows(jdbc, table);
+                        insertSummary.computeIfAbsent(dbId, k -> new LinkedHashMap<>()).put(table,
+                                currentCount);
 
-                        // --- 5) INSERT only new rows ---
-                        FilteredTable filtered = new FilteredTable(wrapped, identicalMap.keySet());
-                        DefaultDataSet filteredDs = new DefaultDataSet(filtered);
-                        DatabaseOperation.INSERT.execute(dbConn, filteredDs);
-                        log.info("[{}] Table[{}] Scenario (INSERT only) | inserted={}", dbId, table,
-                                filtered.getRowCount());
+                    } catch (Exception e) {
+                        log.warn("[{}] Failed to load table [{}]: {}", dbId, table, e.getMessage(),
+                                e);
                     }
-
-                    // Record summary
-                    int currentCount = dialectHandler.countRows(jdbc, table);
-                    insertSummary.computeIfAbsent(dbId, k -> new LinkedHashMap<>()).put(table,
-                            currentCount);
                 }
 
                 dbConn.close();
@@ -392,6 +283,144 @@ public class DataLoader {
         } catch (Exception e) {
             log.error("[{}] Unexpected error occurred: {}", dbId, e.getMessage(), e);
             ErrorHandler.errorAndExit(errorMessage, e);
+        }
+    }
+
+    /**
+     * Detects duplicate rows between dataset and DB table.
+     *
+     * @param wrapped dataset table with potential duplicates
+     * @param originalDbTable snapshot of DB table
+     * @param pkCols list of primary key columns (empty if no PK)
+     * @param jdbc JDBC connection
+     * @param schema schema name
+     * @param table table name
+     * @param dialectHandler DB dialect handler
+     * @return map of dataset row index → DB row index for duplicates
+     * @throws DataSetException if detection fails
+     */
+    private Map<Integer, Integer> detectDuplicates(ITable wrapped, ITable originalDbTable,
+            List<String> pkCols, Connection jdbc, String schema, String table,
+            DbDialectHandler dialectHandler) throws DataSetException {
+
+        Map<Integer, Integer> identicalMap = new LinkedHashMap<>();
+        try {
+            Column[] cols = wrapped.getTableMetaData().getColumns();
+
+            if (!pkCols.isEmpty()) {
+                // With PK
+                for (int i = 0; i < wrapped.getRowCount(); i++) {
+                    for (int j = 0; j < originalDbTable.getRowCount(); j++) {
+                        boolean match = true;
+                        for (String pk : pkCols) {
+                            Object v1 = wrapped.getValue(i, pk);
+                            Object v2 = originalDbTable.getValue(j, pk);
+                            if (v1 == null ? v2 != null : !v1.equals(v2)) {
+                                match = false;
+                                break;
+                            }
+                        }
+                        if (match) {
+                            identicalMap.put(i, j);
+                            log.debug(
+                                    "[{}] Table[{}] Duplicate detected: csvRow={} matches dbRow={}",
+                                    schema, table, i, j);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // Without PK → compare all columns
+                for (int i = 0; i < wrapped.getRowCount(); i++) {
+                    for (int j = 0; j < originalDbTable.getRowCount(); j++) {
+                        boolean match = rowsEqual(wrapped, originalDbTable, jdbc, schema, table, i,
+                                j, cols, dialectHandler);
+                        if (match) {
+                            identicalMap.put(i, j);
+                            log.debug(
+                                    "[{}] Table[{}] Duplicate detected: csvRow={} matches dbRow={}",
+                                    schema, table, i, j);
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new DataSetException("Failed to detect duplicates for table: " + table, e);
+        }
+        return identicalMap;
+    }
+
+    /**
+     * Deletes duplicate rows from DB using the duplicate map.
+     *
+     * @param jdbc JDBC connection
+     * @param schema schema name
+     * @param table table name
+     * @param pkCols primary key columns
+     * @param cols dataset column metadata
+     * @param originalDbTable snapshot of DB table
+     * @param identicalMap dataset→DB duplicate mapping
+     * @param dialectHandler DB dialect handler
+     * @param dbId logical DB identifier
+     * @throws DataSetException if deletion fails
+     */
+    private void deleteDuplicates(Connection jdbc, String schema, String table, List<String> pkCols,
+            Column[] cols, ITable originalDbTable, Map<Integer, Integer> identicalMap,
+            DbDialectHandler dialectHandler, String dbId) throws DataSetException {
+
+        if (identicalMap.isEmpty()) {
+            return;
+        }
+
+        try {
+            if (!pkCols.isEmpty()) {
+                // DELETE by PK
+                String where = pkCols.stream().map(c -> dialectHandler.quoteIdentifier(c) + " = ?")
+                        .collect(Collectors.joining(" AND "));
+                String deleteSql = String.format("DELETE FROM %s.%s WHERE %s",
+                        dialectHandler.quoteIdentifier(schema),
+                        dialectHandler.quoteIdentifier(table), where);
+
+                try (PreparedStatement ps = jdbc.prepareStatement(deleteSql)) {
+                    for (Map.Entry<Integer, Integer> e : identicalMap.entrySet()) {
+                        int dbRow = e.getValue();
+                        for (int k = 0; k < pkCols.size(); k++) {
+                            String pk = pkCols.get(k);
+                            Object val = originalDbTable.getValue(dbRow, pk);
+                            ps.setObject(k + 1, val);
+                        }
+                        ps.addBatch();
+                    }
+                    int deleted = Arrays.stream(ps.executeBatch()).sum();
+                    log.info("[{}] Table[{}] Deleted duplicates by primary key → {}", dbId, table,
+                            deleted);
+                }
+            } else {
+                // DELETE by all columns
+                String where = Arrays.stream(cols)
+                        .map(c -> dialectHandler.quoteIdentifier(c.getColumnName()) + " = ?")
+                        .collect(Collectors.joining(" AND "));
+                String deleteSql = String.format("DELETE FROM %s.%s WHERE %s",
+                        dialectHandler.quoteIdentifier(schema),
+                        dialectHandler.quoteIdentifier(table), where);
+
+                try (PreparedStatement ps = jdbc.prepareStatement(deleteSql)) {
+                    for (Map.Entry<Integer, Integer> e : identicalMap.entrySet()) {
+                        int dbRow = e.getValue();
+                        for (int k = 0; k < cols.length; k++) {
+                            Object val = originalDbTable.getValue(dbRow, cols[k].getColumnName());
+                            ps.setObject(k + 1, val);
+                        }
+                        ps.addBatch();
+                    }
+                    int deleted = Arrays.stream(ps.executeBatch()).sum();
+                    log.info("[{}] Table[{}] Deleted duplicates by all columns → {}", dbId, table,
+                            deleted);
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataSetException("Failed to delete duplicates for table: " + table, e);
         }
     }
 

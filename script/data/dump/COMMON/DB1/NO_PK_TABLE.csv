@@ -1,0 +1,3 @@
+ID,CHAR_COL,NCHAR_COL,VARCHAR2_COL,NVARCHAR2_COL,INTERVAL_YM_COL,INTERVAL_DS_COL
+3,"A         ","あいうえお     ",Hello,こんにちは,+02-00,+00 10:20:30
+4,"B         ","かきくけこ     ",World,世界,+01-06,+00 05:00:00

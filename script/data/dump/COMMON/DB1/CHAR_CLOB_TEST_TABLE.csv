@@ -1,0 +1,3 @@
+ID,CHAR_COL,NCHAR_COL,VARCHAR2_COL,NVARCHAR2_COL,CLOB_COL,NCLOB_COL
+2,,,World,世界,file:char_clob_2.clob,file:char_clob_2.nclob
+3,"B         ","あいうえお     ",,,file:char_clob_3.clob,file:char_clob_3.nclob
