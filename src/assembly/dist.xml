@@ -7,11 +7,11 @@
     <format>zip</format>
   </formats>
 
-  <!-- ZIP解凍直後に CsvDBLink/ がルートに来る -->
+  <!-- ZIP解凍直後に FlexDBLink/ がルートに来る -->
   <includeBaseDirectory>true</includeBaseDirectory>
-  <baseDirectory>CsvDBLink</baseDirectory>
+  <baseDirectory>FlexDBLink</baseDirectory>
 
-  <!-- 実行JAR（exec）を dbunit-data-tool.jar という名前でルートに配置 -->
+  <!-- 実行JAR（exec）を flexdblink.jar という名前でルートに配置 -->
   <files>
     <file>
       <source>${project.build.directory}/${project.artifactId}-exec.jar</source>

@@ -1,4 +1,4 @@
-# Oracle 19c（Docker）環境構築と CsvDBLink サンプル実行
+# Oracle 19c（Docker）環境構築と FlexDBLink サンプル実行
 
 ## Oracle 19c Docker イメージ作成（19.3.0-EE）
 
@@ -38,14 +38,7 @@ docker compose down
 docker compose down -v
 ```
 
-## データ配置パスを環境変数に設定
-
-```bash
-# リポジトリ直下で実行：script/data のフルパスを設定
-export CSVDBLINK_DATA_PATH="$(pwd)/script/data"
-```
-
-## CsvDBLink を script フォルダに配備
+## FlexDBLink を script フォルダに配備
 
 ```bash
 cd <repo-root>
@@ -53,19 +46,19 @@ cd <repo-root>
 # ソースからビルドして配置（テスト完全スキップ）
 mvn clean package -Dmaven.test.skip=true
 cd target
-unzip CsvDBLink-distribution.zip
+unzip FlexDBLink-distribution.zip
 
-cp -pr CsvDBLink <repo-root>/script/.
+cp -pr FlexDBLink <repo-root>/script/.
 
 # 配置確認
-ls -1 <repo-root>/script/CsvDBLink
+ls -1 <repo-root>/script/FlexDBLink
 # conf/
-# csvdblink.jar
+# flexdblink.jar
 ```
 
 ## data-path を修正する手順（application.yml）
 
-**場所**: `script/CsvDBLink/conf/application.yml`
+**場所**: `script/FlexDBLink/conf/application.yml`
 
 ### 変更方法（絶対パスを直書き）
 
@@ -84,22 +77,22 @@ script/
 │  │  ├─ pre/DB1/{*.csv,files/*}
 │  │  └─ COMMON/DB1/{*.csv,files/*}
 │  └─ dump/COMMON/DB1/{*.csv,files/*}
-└─ CsvDBLink/
+└─ FlexDBLink/
    ├─ conf/application.yml
-   └─ csvdblink.jar
+   └─ flexdblink.jar
 ```
 
 ## サンプルデータで実行
 
 ```bash
-cd script/CsvDBLink
+cd script/FlexDBLink
 
 # 初期投入（pre を使用）
-java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load
+java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --load
 
 # 追加シナリオ投入（COMMON：重複削除＋INSERT のみ）
-java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --load COMMON
+java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --load COMMON
 
 # ダンプ（COMMON：CSV と LOB ファイルを出力）
-java -Dspring.config.additional-location=file:conf/ -jar csvdblink.jar --dump COMMON
+java -Dspring.config.additional-location=file:conf/ -jar flexdblink.jar --dump COMMON
 ```
