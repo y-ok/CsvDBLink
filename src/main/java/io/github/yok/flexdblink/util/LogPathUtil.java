@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Utility for rendering directory paths for logs.
+ *
  * <p>
  * If the given directory is under {@code $PROJECT_ROOT/target/test-classes}, this utility returns
  * the path relative to that base; otherwise, it returns the absolute normalized path.

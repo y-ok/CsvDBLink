@@ -914,9 +914,8 @@ public class OracleDialectHandler implements DbDialectHandler {
                 String typeName = rs.getString("TYPE_NAME");
                 int columnSize = rs.getInt("COLUMN_SIZE");
                 int charOctetLength = rs.getInt("CHAR_OCTET_LENGTH");
-                log.debug(
-                        "[{}] Definition: table={} column={} type={} length(CHAR)={} length(BYTE)={}",
-                        dbId, table, colName, typeName, columnSize, charOctetLength);
+                log.debug("[{}] def: tbl={} col={} type={} lenC={} lenB={}", dbId, table, colName,
+                        typeName, columnSize, charOctetLength);
             }
         }
     }

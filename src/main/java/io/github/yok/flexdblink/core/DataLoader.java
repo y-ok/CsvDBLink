@@ -232,7 +232,7 @@ public class DataLoader {
                                         schema, table, lobCols);
                                 if (anyNotNullLob) {
                                     log.info(
-                                            "[{}] Table[{}] NOT NULL LOB present → CLEAN_INSERT all columns",
+                                            "[{}] {}: NOT NULL LOB detected; CLEAN_INSERT all cols",
                                             dbId, table);
                                     DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
                                 } else {

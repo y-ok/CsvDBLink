@@ -151,7 +151,8 @@ public class LoadDataExtension
                         loadScenarioParticipating(context, scenario, methodAnn.dbNames());
                     } else {
                         log.info(
-                                "Method-level scenario directory not found. method={}, scenario={}, dir={}",
+                                "Method-level scenario directory not found."
+                                        + "method={}, scenario={}, dir={}",
                                 m.getName(), scenario, LogPathUtil.renderDirForLog(base.toFile()));
                     }
                 }
@@ -255,8 +256,7 @@ public class LoadDataExtension
             if (!isTxActive()) {
                 beginTestTx("SINGLE", tm, context);
             } else if (!TransactionSynchronizationManager.hasResource(ds)) {
-                log.warn(
-                        "Single-DB mode: Existing transaction detected but the DataSource is not bound. Changes may persist after the test.");
+                log.warn("Single-DB: DS not bound to TX; changes may persist.");
             }
 
             // Dataset: input/
@@ -293,13 +293,10 @@ public class LoadDataExtension
         extras.removeAll(expected);
         if (!missing.isEmpty()) {
             throw new IllegalStateException(
-                    "Folders corresponding to the specified dbNames were not found. missing="
-                            + missing + ", base=" + baseInput);
+                    "Missing dbNames folders: missing=" + missing + ", base=" + baseInput);
         }
         if (!extras.isEmpty()) {
-            log.warn(
-                    "Extra folders under input/ not listed in dbNames were found (ignored). extras={}",
-                    extras);
+            log.warn("Unspecified folders under input (ignored): extras={}", extras);
         }
 
         // Pre-resolve TM/DS set for each dbId
@@ -318,8 +315,8 @@ public class LoadDataExtension
             setTxInterceptorDefaultManager(context, ac, tms.get(0), "MULTI:" + dbIds.get(0));
         } else {
             // 2 or more: do not switch; require explicit @Transactional if needed
-            log.warn(
-                    "Multi-DB mode detected (dbIds={}). Skipping AOP default TM switching. Specify @Transactional(transactionManager=\"...\") explicitly if necessary.",
+            log.warn("Multi-DB mode detected (dbIds={}). Skipping AOP default TM switching."
+                    + "Specify @Transactional(transactionManager=\"...\") explicitly if necessary.",
                     dbIds);
         }
 
@@ -331,9 +328,7 @@ public class LoadDataExtension
                 DataSource ds = dss.get(i);
                 String dbId = dbIds.get(i);
                 if (!TransactionSynchronizationManager.hasResource(ds)) {
-                    throw new IllegalStateException(
-                            "Detected an existing test transaction, but the DataSource is not participating. dbId="
-                                    + dbId);
+                    throw new IllegalStateException("DS not bound to existing TX. dbId=" + dbId);
                 }
             }
             log.info("All DBs are participating in the existing transaction. Running within it.");
@@ -382,16 +377,13 @@ public class LoadDataExtension
 
         String pickedName = findBeanNameByInstance(ac, PlatformTransactionManager.class, picked);
         if ("<unknown>".equals(pickedName)) {
-            log.warn(
-                    "AOP coordination: Could not resolve bean name of the selected TransactionManager. Skipping switch. key={}",
-                    key);
+            log.warn("AOP: cannot resolve TM bean name; skip switch. key={}", key);
             return;
         }
 
         Map<String, TransactionInterceptor> tis = ac.getBeansOfType(TransactionInterceptor.class);
         if (tis.isEmpty()) {
-            log.info(
-                    "AOP coordination: No TransactionInterceptor beans found. Switching is unnecessary.");
+            log.info("AOP: no TransactionInterceptor beans; no switch needed.");
             return;
         }
 
@@ -408,13 +400,13 @@ public class LoadDataExtension
                 ti.setTransactionManagerBeanName(pickedName);
                 rec.touched.put(tiName, Boolean.TRUE);
             } catch (Exception ex) {
-                log.warn(
-                        "AOP coordination: Failed to switch default TransactionManager. interceptor={}, key={}",
-                        tiName, key, ex);
+                log.warn("AOP coordination: Failed to switch default TransactionManager."
+                        + "interceptor={}, key={}", tiName, key, ex);
             }
         }
         log.info(
-                "AOP coordination: Default TransactionManager switched. picked={}, key={}, affectedInterceptors={}",
+                "AOP coordination: Default TransactionManager switched."
+                        + "picked={}, key={}, affectedInterceptors={}",
                 pickedName, key, tis.size());
     }
 
@@ -442,9 +434,8 @@ public class LoadDataExtension
                 ti.setTransactionManagerBeanName(null);
                 ti.setTransactionManager(null);
             } catch (Exception ex) {
-                log.warn(
-                        "AOP coordination: Failed to restore default TransactionManager. interceptor={}",
-                        tiName, ex);
+                log.warn("AOP coordination: Failed to restore default TransactionManager."
+                        + "interceptor={}", tiName, ex);
             }
         }
         store.remove(STORE_KEY_TXI_DEFAULT);
@@ -548,9 +539,8 @@ public class LoadDataExtension
         try {
             return ac.getBean("transactionManager", PlatformTransactionManager.class);
         } catch (Exception e) {
-            throw new IllegalStateException(
-                    "Transaction manager 'transactionManager' not found. It is required in single-DB mode.",
-                    e);
+            throw new IllegalStateException("Transaction manager 'transactionManager' not found."
+                    + "It is required in single-DB mode.", e);
         }
     }
 
@@ -788,16 +778,12 @@ public class LoadDataExtension
         }
 
         if (hits.isEmpty()) {
-            throw new IllegalStateException(
-                    "No DataSourceTransactionManager managing the target DataSource was found for dbId="
-                            + dbId
-                            + ". Define a TransactionManager bound to the target DataSource. candidates="
-                            + Arrays.toString(tmNames));
+            throw new IllegalStateException("No TransactionManager for DataSource. dbId=" + dbId
+                    + ", candidates=" + Arrays.toString(tmNames));
         }
         if (hits.size() > 1) {
-            throw new IllegalStateException(
-                    "Multiple TransactionManagers managing the target DataSource were found for dbId="
-                            + dbId + ". candidates=" + hits);
+            throw new IllegalStateException("Multiple TransactionManagers for DataSource. dbId="
+                    + dbId + ", candidates=" + hits);
         }
         return matched;
     }

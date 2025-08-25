@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>io.github.yok</groupId>
 	<artifactId>flexdblink</artifactId>
-	<version>0.2.0</version>
+	<version>0.1.1</version>
 	<name>FlexDBLink</name>
 	<description>CSV/JSON/YAML/XML ↔ DB loader/dumper with LOB support and JUnit 5 integration.</description>
 	<url>https://github.com/y-ok/FlexDBLink</url>
