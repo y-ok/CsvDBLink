@@ -21,6 +21,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Driver;
@@ -356,23 +357,37 @@ class LoadCsvDataExtensionTest {
     @Test
     void beforeTestExecution_正常ケース_クラスアノテーションシナリオ有りDB無し_例外無く終了すること(@TempDir Path tmp)
             throws Exception {
+        // Arrange: TCCL 直下にクラスパス用のシナリオディレクトリを用意（検出用）
         Path base = tmp;
         Files.writeString(base.resolve("application.properties"),
                 "spring.datasource.url=jdbc:h2:mem:x\nspring.datasource.username=u\n");
+
         Class<?> testClass = DummyClass_ClassAnn_Exists.class;
         String pkgPath = testClass.getPackage().getName().replace('.', '/');
-        Path classRoot = base.resolve(pkgPath).resolve(testClass.getSimpleName());
-        Files.createDirectories(classRoot.resolve("c1"));
+        Path classRootInClasspath = base.resolve(pkgPath).resolve(testClass.getSimpleName());
+        Files.createDirectories(classRootInClasspath.resolve("c1")); // クラスパス側: …/<Class>/c1
+
+        // 併せて、src/test/resources 側にも input/ を作成（DB サブフォルダは作らない）
+        Path classRootInResources = Paths.get("src", "test", "resources").resolve(pkgPath)
+                .resolve(testClass.getSimpleName());
+        Files.createDirectories(classRootInResources.resolve("c1").resolve("input"));
+
+        // TCCL を一時クラスローダに差し替え（application.properties & クラスパス上のシナリオ検出のため）
         prevTccl = Thread.currentThread().getContextClassLoader();
         URLClassLoader cl = new URLClassLoader(new URL[] {base.toUri().toURL()}, prevTccl);
         Thread.currentThread().setContextClassLoader(cl);
         tcclOverridden = true;
+
+        // ExtensionContext をモック
         ExtensionContext ctx = mock(ExtensionContext.class);
         doReturn(testClass).when(ctx).getRequiredTestClass();
         doReturn(Optional.empty()).when(ctx).getTestMethod();
+
+        // Act & Assert
         LoadDataExtension ext = new LoadDataExtension();
         ext.beforeAll(ctx);
         assertDoesNotThrow(() -> ext.beforeTestExecution(ctx));
+
         cl.close();
     }
 
@@ -460,24 +475,36 @@ class LoadCsvDataExtensionTest {
     @Test
     void beforeTestExecution_正常ケース_メソッドシナリオ存在DB未指定_ロード実行経路を通って正常終了すること(@TempDir Path tmp)
             throws Exception {
+        // Arrange: TCCL 直下にメソッド用シナリオディレクトリを用意
         Path base = tmp;
         Files.writeString(base.resolve("application.properties"),
                 "spring.datasource.url=jdbc:h2:mem:x\nspring.datasource.username=u\n");
+
         Class<?> testClass = DummyClass_MethodAnn_ScenarioExists_NoDbDir.class;
         String pkgPath = testClass.getPackage().getName().replace('.', '/');
-        Path classRoot = base.resolve(pkgPath).resolve(testClass.getSimpleName());
-        Files.createDirectories(classRoot.resolve("m_ok")); // シナリオディレクトリのみ作成（DBサブディレクトリは作らない）
+        Path classRootInClasspath = base.resolve(pkgPath).resolve(testClass.getSimpleName());
+        Files.createDirectories(classRootInClasspath.resolve("m_ok")); // クラスパス側: …/<Class>/m_ok
 
+        // src/test/resources 側: …/<Class>/m_ok/input （DB サブフォルダは作らない）
+        Path classRootInResources = Paths.get("src", "test", "resources").resolve(pkgPath)
+                .resolve(testClass.getSimpleName());
+        Files.createDirectories(classRootInResources.resolve("m_ok").resolve("input"));
+
+        // TCCL を一時クラスローダに差し替え
         prevTccl = Thread.currentThread().getContextClassLoader();
         URLClassLoader cl = new URLClassLoader(new URL[] {base.toUri().toURL()}, prevTccl);
         Thread.currentThread().setContextClassLoader(cl);
         tcclOverridden = true;
 
+        // 対象メソッドを取得（@LoadData(scenario={"m_ok"}) が付与されている想定）
         Method m = testClass.getDeclaredMethod("dummy");
+
+        // ExtensionContext をモック
         ExtensionContext ctx = mock(ExtensionContext.class);
         doReturn(testClass).when(ctx).getRequiredTestClass();
         doReturn(Optional.of(m)).when(ctx).getTestMethod();
 
+        // Act & Assert
         LoadDataExtension ext = new LoadDataExtension();
         ext.beforeAll(ctx);
         assertDoesNotThrow(() -> ext.beforeTestExecution(ctx));

@@ -38,7 +38,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-@ExtendWith(LoadDataExtension.class) // Associate the JUnit 5 extension
+@ExtendWith(LoadDataExtension.class)
 public @interface LoadData {
 
     /**

@@ -10,6 +10,7 @@ import io.github.yok.flexdblink.db.LobResolvingTableWrapper;
 import io.github.yok.flexdblink.parser.DataFormat;
 import io.github.yok.flexdblink.parser.DataLoaderFactory;
 import io.github.yok.flexdblink.util.ErrorHandler;
+import io.github.yok.flexdblink.util.LogPathUtil;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.dbunit.database.DatabaseConfig;
 import org.dbunit.database.DatabaseConnection;
+import org.dbunit.database.IDatabaseConnection;
 import org.dbunit.dataset.Column;
 import org.dbunit.dataset.DataSetException;
 import org.dbunit.dataset.DefaultDataSet;
@@ -212,7 +214,7 @@ public class DataLoader {
 
                 for (String table : tables) {
                     try {
-                        // 🔑 ファイル形式を自動判別して読み込み
+                        // ファイル形式を自動判別して読み込み
                         IDataSet dataSet = DataLoaderFactory.create(dir, table);
 
                         ITable base = dataSet.getTable(table);
@@ -393,7 +395,7 @@ public class DataLoader {
                         ps.addBatch();
                     }
                     int deleted = Arrays.stream(ps.executeBatch()).sum();
-                    log.info("[{}] Table[{}] Deleted duplicates by primary key → {}", dbId, table,
+                    log.info("[{}] Table[{}] Deleted duplicates by primary key {}", dbId, table,
                             deleted);
                 }
             } else {
@@ -492,8 +494,7 @@ public class DataLoader {
 
         try {
             String content =
-                    Arrays.stream(dataFiles).map(f -> FilenameUtils.getBaseName(f.getName())) // remove
-                                                                                              // extension
+                    Arrays.stream(dataFiles).map(f -> FilenameUtils.getBaseName(f.getName()))
                             .sorted().collect(Collectors.joining(System.lineSeparator()));
             FileUtils.writeStringToFile(orderFile, content, StandardCharsets.UTF_8);
             log.info("Generated table-ordering.txt: {}", relPath);
@@ -723,98 +724,109 @@ public class DataLoader {
     }
 
     /**
-     * Performs data loading into a single DB using an externally managed JDBC {@link Connection}
-     * and the corresponding {@link ConnectionConfig.Entry}. Connection close/rollback is the
-     * caller's responsibility.
+     * Loads all datasets (CSV / JSON / YAML/YML / XML) under the specified directory into a single
+     * database. No "pre" or "scenario" modes are handled here.
      *
      * <p>
-     * Mode interpretation uses {@link DbUnitConfig#preDirName} as initial (<em>pre</em>). If
-     * {@code scenarioName} is {@code null}/empty, use pre; otherwise, use the specified scenario.
+     * This method uses a caller-managed external JDBC {@link Connection}. The caller is responsible
+     * for transaction control (commit/rollback/close).
      * </p>
      *
      * <p>
-     * Excluded tables are applied from {@link DumpConfig#excludeTables}.
+     * Load strategy is always equivalent to an "initial load": by default it performs
+     * {@code CLEAN_INSERT}. If LOB columns exist and all of them are NULL-allowed, it first
+     * performs {@code CLEAN_INSERT} for non-LOB columns, then applies {@code UPDATE} to reflect LOB
+     * values. Excluded tables are taken from {@link DumpConfig#excludeTables}.
      * </p>
      *
-     * @param scenarioName scenario name (use pre mode if {@code null}/empty)
-     * @param entry target DB connection entry (used for schema/dialect resolution)
-     * @param connection open JDBC connection managed by the caller (autoCommit=false recommended)
-     * @throws IllegalStateException on fatal errors during load
+     * @param dir target directory that contains table files (one file per table)
+     * @param entry DB connection entry (used for schema/dialect resolution)
+     * @param connection external JDBC connection managed by the caller (autoCommit=false
+     *        recommended)
+     * @throws SQLException if a database access error occurs
+     * @throws IllegalArgumentException if any argument is null
+     * @throws IllegalStateException if {@code dir} does not exist or is not a directory
      */
-    public void executeWithConnection(String scenarioName, ConnectionConfig.Entry entry,
-            Connection connection) throws SQLException {
+    public void executeWithConnection(File dir, ConnectionConfig.Entry entry, Connection connection)
+            throws SQLException {
 
-        // Determine mode (pre or specified scenario)
-        String preMode = dbUnitConfig.getPreDirName();
-        String mode = (scenarioName == null || scenarioName.isEmpty()) ? preMode : scenarioName;
+        // Fail fast on invalid arguments
+        if (dir == null) {
+            throw new IllegalArgumentException("Target directory must not be null.");
+        }
+        if (entry == null) {
+            throw new IllegalArgumentException("Connection entry must not be null.");
+        }
+        if (connection == null) {
+            throw new IllegalArgumentException("JDBC connection must not be null.");
+        }
 
-        // DB identifier (for logging)
-        String dbId = entry.getId();
+        final String dbId = entry.getId();
+        log.info("=== DataLoader (external connection) START (db={}, dir={}) ===", dbId,
+                LogPathUtil.renderDirForLog(dir));
 
-        log.info("=== DataLoader (external connection) started (mode={}, DB={}) ===", mode, dbId);
-
-        // Directories for initial/pre and scenario
-        File initialDir = new File(pathsConfig.getLoad(), preMode + File.separator + dbId);
-        File scenarioDir = new File(pathsConfig.getLoad(), mode + File.separator + dbId);
+        // Strict existence check (no silent skip)
+        if (!dir.exists() || !dir.isDirectory()) {
+            log.error("[{}] Target directory does not exist or is not a directory: {}", dbId,
+                    dir.getAbsolutePath());
+            throw new IllegalStateException(
+                    "Target directory does not exist or is not a directory: "
+                            + dir.getAbsolutePath());
+        }
 
         // Resolve dialect handler
         DbDialectHandler dialectHandler = dialectFactory.apply(entry);
 
-        // pre mode load (if scenarioName is empty/same, the same directory is used)
-        deployWithConnection((preMode.equals(mode) ? initialDir : initialDir), dbId, true, entry,
-                connection, dialectHandler, "Initial data load failed (DB=" + dbId + ")");
+        // Execute actual loading with a single directory (no mode concept)
+        deployWithConnection(dir, dbId, entry, connection, dialectHandler,
+                "Data load failed (db=" + dbId + ")");
 
-        // additional load for scenario mode only
-        if (!preMode.equals(mode)) {
-            deployWithConnection(scenarioDir, dbId, false, entry, connection, dialectHandler,
-                    "Scenario data load failed (DB=" + dbId + ")");
-        }
-
-        log.info("=== DataLoader (external connection) finished (DB={}) ===", dbId);
+        log.info("=== DataLoader (external connection) END (db={}) ===", dbId);
     }
 
     /**
-     * Executes the same logic as
-     * {@link #deploy(File, String, boolean, ConnectionConfig.Entry, DbDialectHandler, String)} but
-     * using a caller-supplied external {@link Connection}. Transaction management is the caller's
-     * responsibility.
+     * Uses the caller-managed JDBC {@link Connection} to load all tables under a single directory,
+     * applying an "initial load" strategy (CLEAN_INSERT by default, with a LOB-specific exception).
      *
      * <p>
-     * This version supports multiple dataset formats (CSV, JSON, YAML/YML, XML).<br>
-     * The file format is automatically determined by {@link DataLoaderFactory} based on extension
-     * priority (CSV > JSON > YAML/YML > XML).
+     * This method does not perform any "pre/scenario" branching. Only supported file formats within
+     * the directory (CSV / JSON / YAML/YML / XML) are considered.
      * </p>
      *
      * @param dir dataset directory for this DB
-     * @param dbId DB identifier (entry.getId())
-     * @param initial {@code true} = initial (pre) mode / {@code false} = scenario mode
-     * @param entry DB connection entry (schema/dialect resolution)
-     * @param jdbc externally managed JDBC connection
+     * @param dbId DB identifier used for logging (typically {@code entry.getId()})
+     * @param entry DB connection entry (used for schema/dialect resolution)
+     * @param jdbc caller-managed JDBC connection
      * @param dialectHandler DB dialect handler
-     * @param errorMessage message to log on fatal error
+     * @param errorMessage message passed to {@link ErrorHandler} on fatal errors
+     * @throws IllegalStateException if {@code dir} does not exist or is not a directory
      */
-    private void deployWithConnection(File dir, String dbId, boolean initial,
-            ConnectionConfig.Entry entry, Connection jdbc, DbDialectHandler dialectHandler,
-            String errorMessage) {
+    private void deployWithConnection(File dir, String dbId, ConnectionConfig.Entry entry,
+            Connection jdbc, DbDialectHandler dialectHandler, String errorMessage) {
 
-        if (!dir.exists()) {
-            log.warn("[{}] Directory does not exist → skipping", dbId);
-            return;
+        // Defensive check (callers should have validated already)
+        if (!dir.exists() || !dir.isDirectory()) {
+            log.error("[{}] Target directory does not exist or is not a directory: {}", dbId,
+                    dir.getAbsolutePath());
+            throw new IllegalStateException(
+                    "Target directory does not exist or is not a directory: "
+                            + dir.getAbsolutePath());
         }
 
+        IDatabaseConnection dbConn = null;
         try {
-            // Generate table-ordering file (CSV only, legacy behavior)
+            // Generate table-ordering file for CSV (legacy behavior)
             ensureTableOrdering(dir);
 
-            // Collect candidate table names from files
+            // Collect candidate table names from files (only supported extensions)
             Set<String> tableSet = new HashSet<>();
             File[] files = dir.listFiles((d, name) -> {
                 String ext = FilenameUtils.getExtension(name).toLowerCase(Locale.ROOT);
-                // only supported formats
                 return Arrays.stream(DataFormat.values()).anyMatch(fmt -> fmt.matches(ext));
             });
             if (files != null) {
                 for (File f : files) {
+                    // file base name = table name
                     String base = FilenameUtils.getBaseName(f.getName());
                     tableSet.add(base);
                 }
@@ -822,9 +834,10 @@ public class DataLoader {
 
             List<String> tables = new ArrayList<>(tableSet);
             if (tables.isEmpty()) {
-                log.info("[{}] No dataset files → skipping", dbId);
+                log.info("[{}] No dataset files found under: {}", dbId, dir.getAbsolutePath());
                 return;
             }
+            // Stable alphabetical order
             tables.sort(String::compareTo);
 
             // Apply DumpConfig exclusions
@@ -841,149 +854,79 @@ public class DataLoader {
                         .collect(Collectors.toList());
 
                 if (tables.isEmpty()) {
-                    log.info("[{}] No effective tables (all excluded) → skipping", dbId);
+                    log.info("[{}] No effective tables remain after exclusions.", dbId);
                     return;
                 }
             }
 
             // Create DBUnit connection
-            DatabaseConnection dbConn = createDbUnitConn(jdbc, entry, dialectHandler);
+            dbConn = createDbUnitConn(jdbc, entry, dialectHandler);
             String schema = schemaNameResolver.apply(entry);
 
+            // Load each table (always "initial load" strategy)
             for (String table : tables) {
-                // Resolve dataset file for this table (CSV/JSON/YAML/XML)
+                // Resolve dataset for the table (CSV / JSON / YAML / XML)
                 IDataSet dataSet;
                 try {
                     dataSet = DataLoaderFactory.create(dir, table);
                 } catch (Exception e) {
-                    log.warn("[{}] Failed to resolve dataset for table={} → skipping: {}", dbId,
+                    // Skip only this table if resolution fails
+                    log.warn("[{}] Failed to resolve dataset for table={} — skipping: {}", dbId,
                             table, e.getMessage());
                     continue;
                 }
 
+                // Log table definition details via dialect handler (DDL, PKs, etc.)
                 dialectHandler.logTableDefinition(jdbc, schema, table, dbId);
 
+                // Wrap with LOB resolver (expands file:... references)
                 ITable base = dataSet.getTable(table);
-
-                // Wrap with LOB resolver
                 ITable wrapped = new LobResolvingTableWrapper(base, dir, dialectHandler);
                 DefaultDataSet ds = new DefaultDataSet(wrapped);
 
-                if (initial) {
-                    // Initial mode (CLEAN_INSERT + UPDATE)
-                    Column[] lobCols = dialectHandler.getLobColumns(dir.toPath(), table);
-                    if (lobCols.length > 0) {
-                        boolean anyNotNullLob =
-                                dialectHandler.hasNotNullLobColumn(jdbc, schema, table, lobCols);
-                        if (anyNotNullLob) {
-                            DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
-                        } else {
-                            DatabaseOperation.CLEAN_INSERT.execute(dbConn, new DefaultDataSet(
-                                    DefaultColumnFilter.excludedColumnsTable(base, lobCols)));
-                            DatabaseOperation.UPDATE.execute(dbConn, ds);
-                        }
-                    } else {
+                // Determine LOB handling strategy
+                Column[] lobCols = dialectHandler.getLobColumns(dir.toPath(), table);
+                if (lobCols.length > 0) {
+                    boolean anyNotNullLob =
+                            dialectHandler.hasNotNullLobColumn(jdbc, schema, table, lobCols);
+                    if (anyNotNullLob) {
+                        // LOB contains NOT NULL → single CLEAN_INSERT
                         DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
+                    } else {
+                        // All LOB columns are NULL-allowed:
+                        // 1) CLEAN_INSERT for non-LOB columns
+                        ITable nonLobOnly = DefaultColumnFilter.excludedColumnsTable(base, lobCols);
+                        DatabaseOperation.CLEAN_INSERT.execute(dbConn,
+                                new DefaultDataSet(nonLobOnly));
+                        // 2) UPDATE to reflect LOB values (including file:... sources)
+                        DatabaseOperation.UPDATE.execute(dbConn, ds);
                     }
                 } else {
-                    // Scenario mode (delete duplicates + insert new)
-                    ITable originalDbTable = dbConn.createDataSet().getTable(table);
-                    List<String> pkCols = dialectHandler.getPrimaryKeyColumns(jdbc, schema, table);
-
-                    Map<Integer, Integer> identicalMap = new LinkedHashMap<>();
-                    Column[] cols = wrapped.getTableMetaData().getColumns();
-
-                    if (!pkCols.isEmpty()) {
-                        for (int i = 0; i < wrapped.getRowCount(); i++) {
-                            for (int j = 0; j < originalDbTable.getRowCount(); j++) {
-                                boolean match = true;
-                                for (String pk : pkCols) {
-                                    Object v1 = wrapped.getValue(i, pk);
-                                    Object v2 = originalDbTable.getValue(j, pk);
-                                    if (v1 == null ? v2 != null : !v1.equals(v2)) {
-                                        match = false;
-                                        break;
-                                    }
-                                }
-                                if (match) {
-                                    identicalMap.put(i, j);
-                                    break;
-                                }
-                            }
-                        }
-                    } else {
-                        for (int i = 0; i < wrapped.getRowCount(); i++) {
-                            for (int j = 0; j < originalDbTable.getRowCount(); j++) {
-                                boolean match = rowsEqual(wrapped, originalDbTable, jdbc, schema,
-                                        table, i, j, cols, dialectHandler);
-                                if (match) {
-                                    identicalMap.put(i, j);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!identicalMap.isEmpty()) {
-                        String deleteSql;
-                        if (!pkCols.isEmpty()) {
-                            String where = pkCols.stream()
-                                    .map(c -> dialectHandler.quoteIdentifier(c) + " = ?")
-                                    .collect(Collectors.joining(" AND "));
-                            deleteSql = String.format("DELETE FROM %s.%s WHERE %s",
-                                    dialectHandler.quoteIdentifier(schema),
-                                    dialectHandler.quoteIdentifier(table), where);
-                            try (PreparedStatement ps = jdbc.prepareStatement(deleteSql)) {
-                                for (Map.Entry<Integer, Integer> e : identicalMap.entrySet()) {
-                                    int dbRow = e.getValue();
-                                    for (int k = 0; k < pkCols.size(); k++) {
-                                        String pk = pkCols.get(k);
-                                        Object val = originalDbTable.getValue(dbRow, pk);
-                                        ps.setObject(k + 1, val);
-                                    }
-                                    ps.addBatch();
-                                }
-                                int deleted = Arrays.stream(ps.executeBatch()).sum();
-                                log.info("[{}] Table[{}] Deleted duplicates by primary key → {}",
-                                        dbId, table, deleted);
-                            }
-                        } else {
-                            String where = Arrays.stream(cols).map(
-                                    c -> dialectHandler.quoteIdentifier(c.getColumnName()) + " = ?")
-                                    .collect(Collectors.joining(" AND "));
-                            deleteSql = String.format("DELETE FROM %s.%s WHERE %s",
-                                    dialectHandler.quoteIdentifier(schema),
-                                    dialectHandler.quoteIdentifier(table), where);
-                            try (PreparedStatement ps = jdbc.prepareStatement(deleteSql)) {
-                                for (Map.Entry<Integer, Integer> e : identicalMap.entrySet()) {
-                                    int dbRow = e.getValue();
-                                    for (int k = 0; k < cols.length; k++) {
-                                        Object val = originalDbTable.getValue(dbRow,
-                                                cols[k].getColumnName());
-                                        ps.setObject(k + 1, val);
-                                    }
-                                    ps.addBatch();
-                                }
-                            }
-                        }
-                    }
-
-                    FilteredTable filtered = new FilteredTable(wrapped, identicalMap.keySet());
-                    DefaultDataSet filteredDs = new DefaultDataSet(filtered);
-                    DatabaseOperation.INSERT.execute(dbConn, filteredDs);
+                    // No LOB columns → simple CLEAN_INSERT
+                    DatabaseOperation.CLEAN_INSERT.execute(dbConn, ds);
                 }
 
                 // Update summary
                 int currentCount = dialectHandler.countRows(jdbc, table);
                 insertSummary.computeIfAbsent(dbId, k -> new LinkedHashMap<>()).put(table,
                         currentCount);
-            }
 
-            dbConn.close();
+                log.info("[{}] Loaded table successfully: {} (current rows={})", dbId, table,
+                        currentCount);
+            }
 
         } catch (Exception e) {
             log.error("[{}] Unexpected error occurred: {}", dbId, e.getMessage(), e);
             ErrorHandler.errorAndExit(errorMessage, e);
+        } finally {
+            if (dbConn != null) {
+                try {
+                    dbConn.close();
+                } catch (Exception closeEx) {
+                    log.warn("[{}] Failed to close DBUnit connection: {}", dbId,
+                            closeEx.getMessage(), closeEx);
+                }
+            }
         }
     }
 }
