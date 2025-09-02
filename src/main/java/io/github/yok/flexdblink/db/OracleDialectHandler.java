@@ -841,6 +841,15 @@ public class OracleDialectHandler implements DbDialectHandler {
     @Override
     public Column[] getLobColumns(Path csvDirPath, String tableName)
             throws IOException, DataSetException {
+
+        log.info("CSVParser class={}", org.apache.commons.csv.CSVParser.class.getName());
+        log.info("CSVParser from={}",
+                org.apache.commons.csv.CSVParser.class.getResource("CSVParser.class"));
+        String implVer = (org.apache.commons.csv.CSVParser.class.getPackage() != null
+                ? org.apache.commons.csv.CSVParser.class.getPackage().getImplementationVersion()
+                : null);
+        log.info("CSV implVersion={}", implVer != null ? implVer : "N/A");
+
         // Full path to CSV file
         Path csv = csvDirPath.resolve(tableName + ".csv");
 
